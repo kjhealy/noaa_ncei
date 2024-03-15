@@ -49,9 +49,17 @@ season_lab <-  tibble(yrday = yday(as.Date(c("2019-03-01",
                                              "2019-12-01"))),
                       lab = c("Spring", "Summer", "Autumn", "Winter"))
 
+## For the filename processing
+## This one gives you an unknown number of chunks each with approx n elements
+chunk <- function(x, n) split(x, ceiling(seq_along(x)/n))
 
-## Data
+## This one gives you n chunks each with an approx equal but unknown number of elements
+chunk2 <- function(x, n) split(x, cut(seq_along(x), n, labels = FALSE))
 
+
+
+
+## For the raster data
 library(ncdf4)
 library(CFtime)
 library(terra)
@@ -103,14 +111,9 @@ get_anom <- function(fname, lat_1=0, lat_2=60, lon_1=0, lon_2=280) {
 
 }
 
-## All the daily .nc files we downloaded:
-all_fnames <- fs::dir_ls(here("raw"), recurse = TRUE, glob = "*.nc")
-chunked_fnames <- split(all_fnames, ceiling(seq_along(all_fnames)/25))
-
 ## The Terra way. Should be considerably faster. (And it is)
-## Even faster with the chunked names, to maximize layered raster processing
-# Atlantic
-crop_bb <- c(-80, 0, 0, 60)
+## Even faster with the chunked names, to maximize layered raster processing,
+## Chunks of 25 elements or so seem to work quickly enough.
 
 process_raster <- function(fnames, crop_area = crop_bb, var = "sst") {
   tdf <- terra::rast(fnames)[var] |>
@@ -128,15 +131,21 @@ process_raster <- function(fnames, crop_area = crop_bb, var = "sst") {
 
 }
 
+## Filenames
+## All the daily .nc files we downloaded:
+all_fnames <- fs::dir_ls(here("raw"), recurse = TRUE, glob = "*.nc")
+chunked_fnames <- chunk2(all_fnames, 620)
+
+
+## Atlantic box
+crop_bb <- c(-80, 0, 0, 60)
+
 # Try one only
-# fname <- all_fnames[5000]
-# chk <- process_raster(fname)
-
-chk <- process_raster(chunked_fnames[[1]])
-
+chk <- process_raster(chunked_fnames[[500]])
+chk
 
 ## wheeee
-## Process >15,000 files, but in chunks!
+## Process >15,000 files
 tictoc::tic("Terra Method")
 df <- future_map(chunked_fnames, process_raster) |>
   list_rbind() |>
@@ -184,14 +193,10 @@ dfp |>
 
 
 
-## Checks
-atl_array <- tmp_array_sst[lon > lon_2, lat > lat_1 & lat < lat_2]
-
-atl_grid <- expand.grid(lon = lon[lon > lon_2],
-                        lat = lat[lat > lat_1 & lat < lat_2])
-
-lattice::levelplot(atl_array ~ lon * lat, data = atl_grid, pretty = T)
-
-grid <- expand.grid(lon = lon,
-                    lat = lat)
-lattice::levelplot(tmp_array_sst ~ lon * lat, data = grid, pretty = T)
+# ## Checks
+# atl_array <- tmp_array_sst[lon > lon_2, lat > lat_1 & lat < lat_2]
+# atl_grid <- expand.grid(lon = lon[lon > lon_2],
+# lattice::levelplot(atl_array ~ lon * lat, data = atl_grid, pretty = T)
+# grid <- expand.grid(lon = lon,
+#                     lat = lat)
+# lattice::levelplot(tmp_array_sst ~ lon * lat, data = grid, pretty = T)
