@@ -30,7 +30,52 @@ import_myriad_condensed()
 
 theme_set(theme_myriad_semi())
 
+## Functions
+get_nc_files <- function(url = "https://www.ncei.noaa.gov/data/sea-surface-temperature-optimum-interpolation/v2.1/access/avhrr/",
+                       subdir) {
+  local <- here::here("raw/www.ncei.noaa.gov/data/sea-surface-temperature-optimum-interpolation/v2.1/access/avhrr/")
 
+  localdir <- paste0(local, subdir)
+
+  if(!fs::dir_exists(localdir)) fs::dir_create(localdir)
+
+  files <- rvest::read_html(paste0(url,subdir)) |>
+    rvest::html_elements("a") |>
+    rvest::html_text2()
+  files <- subset(files, str_detect(files, "nc"))
+
+  full_urls <- paste0(url, subdir, "/", files)
+  full_outpaths <- paste0(localdir, "/", files)
+
+  walk2(full_urls, full_outpaths, \(x,y) httr::GET(x, httr::write_disk(y, overwrite = TRUE)))
+
+}
+
+# Remove prelim files if finalized version exists
+clean_prelims <- function(subdir) {
+  local <- here::here("raw/www.ncei.noaa.gov/data/sea-surface-temperature-optimum-interpolation/v2.1/access/avhrr/")
+  path <- paste0(local, subdir)
+
+  complete_nc_files <- basename(fs::dir_ls(path, regexp = "index|._preliminary.nc", invert = TRUE))
+  prelim_nc_files <- basename(fs::dir_ls(path, glob = "*_preliminary.nc"))
+
+  # Complete exists
+  complete_dates <- str_extract(complete_nc_files, paste0(subdir, "\\d{2}"))
+  complete_dates_regexp <- paste(complete_dates, collapse = "|")
+
+  ## Deletion
+  deletion_candidates <- str_detect(prelim_nc_files, complete_dates_regexp)
+  delete_these <- prelim_nc_files[deletion_candidates]
+  if(!rlang::is_empty(delete_these)) fs::file_delete(paste0(path, "/", prelim_nc_files[delete_these]))
+
+}
+
+# Update the files
+# February
+# get_nc_files(subdir = "202402")
+# clean_prelims(subdir = "202402")
+
+## Seasons for plotting
 season <-  function(in_date){
   br = yday(as.Date(c("2019-03-01",
                       "2019-06-01",
@@ -134,7 +179,7 @@ process_raster <- function(fnames, crop_area = crop_bb, var = "sst") {
 ## Filenames
 ## All the daily .nc files we downloaded:
 all_fnames <- fs::dir_ls(here("raw"), recurse = TRUE, glob = "*.nc")
-chunked_fnames <- chunk2(all_fnames, 620)
+chunked_fnames <- chunk(all_fnames, 25)
 
 
 ## Atlantic box
@@ -168,8 +213,10 @@ tictoc::toc()
 # df_ncdf
 # tictoc::toc()
 
-## The plot
+## Save out as a csv
+write_csv(df, file = here("data", "sst_means.csv"))
 
+## The plot
 dfp <- df
 
 
@@ -180,18 +227,20 @@ dfp |>
     .default = "All other years"
   )) |>
   ggplot(aes(x = yrday, y = wt_mean_sst, group = year, color = year_flag)) +
-  geom_line() +
+  geom_line(linewidth = rel(0.8)) +
   scale_x_continuous(breaks = season_lab$yrday, labels = season_lab$lab) +
   scale_color_manual(values = c("orange", "firebrick", "gray70")) +
+  guides(
+    x = guide_axis(minor.ticks = TRUE, cap = "both"),
+    y = guide_axis(minor.ticks = TRUE, cap = "both"),
+    color = guide_legend(override.aes = list(linewidth = 1.4))
+  ) +
   labs(x = "Season", y = "Mean Temperature (Celsius)",
        color = "Year",
        title = "Mean Daily Sea Surface Temperature, North Atlantic Ocean, 1981-2024",
        subtitle = "Gridded and weighted NOAA OISST v2.1 estimates",
-       caption = "Data processed with R; Figure made with ggplot")
-
-
-
-
+       caption = "Data processed with R; Figure made with ggplot") +
+  theme(axis.line = element_line(color = "gray30", linewidth = rel(1)))
 
 # ## Checks
 # atl_array <- tmp_array_sst[lon > lon_2, lat > lat_1 & lat < lat_2]
