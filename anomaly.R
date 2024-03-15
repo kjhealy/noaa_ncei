@@ -160,7 +160,11 @@ get_anom <- function(fname, lat_1=0, lat_2=60, lon_1=0, lon_2=280) {
 ## Even faster with the chunked names, to maximize layered raster processing,
 ## Chunks of 25 elements or so seem to work quickly enough.
 
+seas <- sf::read_sf(here("raw", "World_Seas_IHO_v3"))
+seas_vect <- terra::vect(seas)
+
 process_raster <- function(fnames, crop_area = crop_bb, var = "sst") {
+
   tdf <- terra::rast(fnames)[var] |>
     terra::rotate() |>   # Fix 0-360 lon
     terra::crop(crop_bb) # Atlantic region
@@ -203,7 +207,6 @@ df <- future_map(chunked_fnames, process_raster) |>
          season = season(date))
 tictoc::toc()
 
-
 # tictoc::tic("NCDF4 Method")
 # ## wheeee
 # ## Process >15,000 files
@@ -227,7 +230,7 @@ dfp |>
     .default = "All other years"
   )) |>
   ggplot(aes(x = yrday, y = wt_mean_sst, group = year, color = year_flag)) +
-  geom_line(linewidth = rel(0.8)) +
+  geom_line(linewidth = rel(0.65)) +
   scale_x_continuous(breaks = season_lab$yrday, labels = season_lab$lab) +
   scale_color_manual(values = c("orange", "firebrick", "gray70")) +
   guides(
@@ -249,3 +252,98 @@ dfp |>
 # grid <- expand.grid(lon = lon,
 #                     lat = lat)
 # lattice::levelplot(tmp_array_sst ~ lon * lat, data = grid, pretty = T)
+
+
+
+## Seas of the world?
+
+seas <- sf::read_sf(here("raw", "World_Seas_IHO_v3")) |>
+  filter(NAME %in% c("South Atlantic Ocean",
+                     "South Pacific Ocean",
+                     "Indian Ocean",
+                     "North Pacific Ocean",
+                     "North Atlantic Ocean"))
+
+seas_ids <- tibble(
+  ID = c(1:5),
+  sea = c("South Atlantic Ocean",
+          "South Pacific Ocean",
+          "Indian Ocean",
+          "North Pacific Ocean",
+          "North Atlantic Ocean")
+)
+
+# Need to wrap the object (because C++ pointers)
+seas_vect <- wrap(terra::vect(seas))
+
+process_raster_seas <- function(fnames, var = "sst") {
+
+  tdf_seas <- terra::rast(fnames)[var] |>
+    terra::rotate() |>
+    terra::extract(unwrap(seas_vect), "mean", weights = TRUE, na.rm = TRUE)
+
+  colnames(tdf_seas) <- c("ID", paste0("d_", terra::time(terra::rast(fnames)[var])))
+  tdf_seas |>
+     pivot_longer(-ID, names_to = "date", values_to = "sst_wt_mean")
+
+  }
+
+## This takes about half an hour
+tictoc::tic("big op")
+seameans_df <- future_map(chunked_fnames, process_raster_seas) |>
+  list_rbind() |>
+  mutate(date = str_remove(date, "d_"),
+         date = ymd(date),
+         year = lubridate::year(date),
+         month = lubridate::month(date),
+         day = lubridate::day(date),
+         yrday = lubridate::yday(date),
+         season = season(date)) |>
+  left_join(seas_ids, by = "ID")
+tictoc::toc()
+
+write_csv(seameans_df, file = here("data", "oceans_sst_means.csv"))
+
+month_labs <- seameans_df |>
+  filter(sea == "North Atlantic Ocean",
+         year == 2023,
+         day == 15) |>
+  select(date, year, yrday, month, day) |>
+  mutate(month_lab = month(date, label = TRUE, abbr = TRUE))
+
+
+out <- seameans_df |>
+  mutate(year_flag = case_when(
+    year == 2023 ~ "2023",
+    year == 2024 ~ "2024",
+    .default = "All other years"
+  ),
+  sea_f = factor(sea, levels = c(
+    "North Atlantic Ocean",
+    "South Atlantic Ocean",
+    "North Pacific Ocean",
+    "South Pacific Ocean",
+    "Indian Ocean"), ordered = TRUE)) |>
+  ggplot(aes(x = yrday, y = sst_wt_mean, group = year, color = year_flag)) +
+  geom_line(linewidth = rel(0.5)) +
+  scale_x_continuous(breaks = month_labs$yrday, labels = month_labs$month_lab) +
+  scale_color_manual(values = c("orange", "firebrick", "gray70")) +
+  guides(
+    x = guide_axis(cap = "both"),
+    y = guide_axis(minor.ticks = TRUE, cap = "both"),
+    color = guide_legend(override.aes = list(linewidth = 1.4))
+  ) +
+  facet_wrap(~ reorder(sea, sst_wt_mean), ncol = 1, axes = "all_x", axis.labels = "all_y") +
+  labs(x = "Month of the Year", y = "Mean Temperature (Celsius)",
+       color = "Year",
+       title = "Mean Daily Sea Surface Temperatures, 1981-2024",
+       subtitle = "Area-weighted 0.25° grid estimates; NOAA OISST v2.1; IHO Sea Boundaries",
+       caption = "Data processed with R; Figure made with ggplot by Kieran Healy / @kjhealy") +
+  theme(axis.line = element_line(color = "gray30", linewidth = rel(1)),
+        strip.text = element_text(face = "bold", size = rel(1.4)),
+        plot.title = element_text(size = rel(1.525)),
+        plot.subtitle = element_text(size = rel(1.1)))
+
+ggsave(here("figures", "five_oceans.pdf"), out, width = 6, height = 20)
+
+ggsave(here("figures", "five_oceans.png"), out, width = 6, height = 20, dpi = 300)
