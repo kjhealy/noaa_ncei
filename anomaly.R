@@ -2,7 +2,7 @@
 
 #install.packages("ncdf4")
 #install.packages("CFtime")
-#install.packages("ClimProjDiags")
+
 
 library(tidyverse)
 library(here)
@@ -31,12 +31,35 @@ import_myriad_condensed()
 theme_set(theme_myriad_semi())
 
 
+season <-  function(in_date){
+  br = yday(as.Date(c("2019-03-01",
+                      "2019-06-01",
+                      "2019-09-01",
+                      "2019-12-01")))
+  x = yday(in_date)
+  x = cut(x, breaks = c(0, br, 366))
+  levels(x) = c("Winter", "Spring", "Summer", "Autumn", "Winter")
+  x
+}
+
+
+season_lab <-  tibble(yrday = yday(as.Date(c("2019-03-01",
+                                             "2019-06-01",
+                                             "2019-09-01",
+                                             "2019-12-01"))),
+                      lab = c("Spring", "Summer", "Autumn", "Winter"))
+
+
 ## Data
 
 library(ncdf4)
 library(CFtime)
+library(terra)
+
+
 
 ## Single slice. Defaults to North Atlantic rectangle
+## I'll keep this fn here, but I won't use it: the Terra way is faster
 get_anom <- function(fname, lat_1=0, lat_2=60, lon_1=0, lon_2=280) {
   dname_sst <- "sst"
   dname_anom <- "anom"
@@ -82,45 +105,63 @@ get_anom <- function(fname, lat_1=0, lat_2=60, lon_1=0, lon_2=280) {
 
 ## All the daily .nc files we downloaded:
 all_fnames <- fs::dir_ls(here("raw"), recurse = TRUE, glob = "*.nc")
+chunked_fnames <- split(all_fnames, ceiling(seq_along(all_fnames)/25))
 
-# Try one only
-#fname <- all_fnames[5000]
-#
-#chk <- get_anom(all_fnames[10000])
-# chk
+## The Terra way. Should be considerably faster. (And it is)
+## Even faster with the chunked names, to maximize layered raster processing
+# Atlantic
+crop_bb <- c(-80, 0, 0, 60)
 
-## wheeee
-## Process >15,000 files 
-df <- future_map(all_fnames, get_anom) |>
-  list_rbind()
+process_raster <- function(fnames, crop_area = crop_bb, var = "sst") {
+  tdf <- terra::rast(fnames)[var] |>
+    terra::rotate() |>   # Fix 0-360 lon
+    terra::crop(crop_bb) # Atlantic region
 
-df
+  wts <- terra::cellSize(tdf, unit = "km") # For scaling
 
-## The plot
-season <-  function(in_date){
-  br = yday(as.Date(c("2019-03-01",
-                      "2019-06-01",
-                      "2019-09-01",
-                      "2019-12-01")))
-  x = yday(in_date)
-  x = cut(x, breaks = c(0, br, 366))
-  levels(x) = c("Winter", "Spring", "Summer", "Autumn", "Winter")
-  x
+  data.frame(
+    date = terra::time(tdf),
+    # global() calculates a quantity for the whole grid on a particular SpatRaster
+    # so we get one weighted mean per file that comes in
+    wt_mean_sst = global(tdf, "mean", weights = wts, na.rm=TRUE)$weighted_mean
+  )
+
 }
 
+# Try one only
+# fname <- all_fnames[5000]
+# chk <- process_raster(fname)
 
-season_lab <-  tibble(yrday = yday(as.Date(c("2019-03-01",
-                                         "2019-06-01",
-                                         "2019-09-01",
-                                         "2019-12-01"))),
-                    lab = c("Spring", "Summer", "Autumn", "Winter"))
+chk <- process_raster(chunked_fnames[[1]])
 
-dfp <- df |>
-  mutate(year = lubridate::year(date),
+
+## wheeee
+## Process >15,000 files, but in chunks!
+tictoc::tic("Terra Method")
+df <- future_map(chunked_fnames, process_raster) |>
+  list_rbind() |>
+  as_tibble() |>
+  mutate(date = ymd(date),
+         year = lubridate::year(date),
          month = lubridate::month(date),
          day = lubridate::day(date),
          yrday = lubridate::yday(date),
          season = season(date))
+tictoc::toc()
+
+
+# tictoc::tic("NCDF4 Method")
+# ## wheeee
+# ## Process >15,000 files
+# df_ncdf <- future_map(all_fnames, get_anom) |>
+#   list_rbind()
+#
+# df_ncdf
+# tictoc::toc()
+
+## The plot
+
+dfp <- df
 
 
 dfp |>
