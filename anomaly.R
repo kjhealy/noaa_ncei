@@ -324,16 +324,17 @@ out <- seameans_df |>
     "North Pacific Ocean",
     "South Pacific Ocean",
     "Indian Ocean"), ordered = TRUE)) |>
+  filter(sea != "Indian Ocean") |>
   ggplot(aes(x = yrday, y = sst_wt_mean, group = year, color = year_flag)) +
   geom_line(linewidth = rel(0.5)) +
   scale_x_continuous(breaks = month_labs$yrday, labels = month_labs$month_lab) +
-  scale_color_manual(values = c("orange", "firebrick", "gray70")) +
+  scale_color_manual(values = c("orange", "firebrick", "skyblue")) +
   guides(
     x = guide_axis(cap = "both"),
     y = guide_axis(minor.ticks = TRUE, cap = "both"),
     color = guide_legend(override.aes = list(linewidth = 1.4))
   ) +
-  facet_wrap(~ reorder(sea, sst_wt_mean), ncol = 1, axes = "all_x", axis.labels = "all_y") +
+  facet_wrap(~ sea_f, axes = "all_x", axis.labels = "all_y") +
   labs(x = "Month of the Year", y = "Mean Temperature (Celsius)",
        color = "Year",
        title = "Mean Daily Sea Surface Temperatures, 1981-2024",
@@ -344,6 +345,6 @@ out <- seameans_df |>
         plot.title = element_text(size = rel(1.525)),
         plot.subtitle = element_text(size = rel(1.1)))
 
-ggsave(here("figures", "five_oceans.pdf"), out, width = 6, height = 20)
+ggsave(here("figures", "four_oceans.pdf"), out, width = 10, height = 10)
 
-ggsave(here("figures", "five_oceans.png"), out, width = 6, height = 20, dpi = 300)
+ggsave(here("figures", "four_oceans.png"), out, width = 10, height = 10, dpi = 300)
