@@ -159,7 +159,6 @@ get_anom <- function(fname, lat_1=0, lat_2=60, lon_1=0, lon_2=280) {
 ## The Terra way. Should be considerably faster. (And it is)
 ## Even faster with the chunked names, to maximize layered raster processing,
 ## Chunks of 25 elements or so seem to work quickly enough.
-
 seas <- sf::read_sf(here("raw", "World_Seas_IHO_v3"))
 seas_vect <- terra::vect(seas)
 
@@ -256,7 +255,6 @@ dfp |>
 
 
 ## Seas of the world?
-
 seas <- sf::read_sf(here("raw", "World_Seas_IHO_v3")) |>
   filter(NAME %in% c("South Atlantic Ocean",
                      "South Pacific Ocean",
@@ -274,23 +272,31 @@ seas_ids <- tibble(
 )
 
 # Need to wrap the object (because C++ pointers)
+# If we don't do this it can't be passed around
+# across the processes that future_map() will spawn
 seas_vect <- wrap(terra::vect(seas))
 
-process_raster_seas <- function(fnames, var = "sst") {
+seas_vect <- terra::vect(seas)
+tmp_tdf_seas <- terra::rast(fnames)[var] |>
+  rotate()
+seas_zonal <- rasterize(seas_vect, tmp_tdf_seas, "NAME")
+seas_zonal_wrapped <- wrap(seas_zonal)
+
+# This is WAY Quicker than extract()
+process_raster_seas_zonal <- function(fnames, var = "sst") {
 
   tdf_seas <- terra::rast(fnames)[var] |>
     terra::rotate() |>
-    terra::extract(unwrap(seas_vect), "mean", weights = TRUE, na.rm = TRUE)
+    zonal(unwrap(seas_zonal_wrapped), mean, na.rm = TRUE)
 
   colnames(tdf_seas) <- c("ID", paste0("d_", terra::time(terra::rast(fnames)[var])))
   tdf_seas |>
-     pivot_longer(-ID, names_to = "date", values_to = "sst_wt_mean")
+    pivot_longer(-ID, names_to = "date", values_to = "sst_wt_mean")
 
-  }
+}
 
-## This takes about half an hour
 tictoc::tic("big op")
-seameans_df <- future_map(chunked_fnames, process_raster_seas) |>
+seameans_df <- future_map(chunked_fnames, process_raster_seas_zonal) |>
   list_rbind() |>
   mutate(date = str_remove(date, "d_"),
          date = ymd(date),
@@ -299,10 +305,10 @@ seameans_df <- future_map(chunked_fnames, process_raster_seas) |>
          day = lubridate::day(date),
          yrday = lubridate::yday(date),
          season = season(date)) |>
-  left_join(seas_ids, by = "ID")
+  rename(sea = ID)
 tictoc::toc()
 
-write_csv(seameans_df, file = here("data", "oceans_sst_means.csv"))
+write_csv(seameans_df, file = here("data", "oceans_sst_means_zonal.csv"))
 
 month_labs <- seameans_df |>
   filter(sea == "North Atlantic Ocean",
