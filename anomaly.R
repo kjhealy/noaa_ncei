@@ -159,32 +159,6 @@ tictoc::toc()
 ## Save out as a csv
 write_csv(df, file = here("data", "sst_means.csv"))
 
-## The plot
-dfp <- df
-
-
-dfp |>
-  mutate(year_flag = case_when(
-    year == 2023 ~ "2023",
-    year == 2024 ~ "2024",
-    .default = "All other years"
-  )) |>
-  ggplot(aes(x = yrday, y = wt_mean_sst, group = year, color = year_flag)) +
-  geom_line(linewidth = rel(0.65)) +
-  scale_x_continuous(breaks = season_lab$yrday, labels = season_lab$lab) +
-  scale_color_manual(values = c("orange", "firebrick", "gray70")) +
-  guides(
-    x = guide_axis(minor.ticks = TRUE, cap = "both"),
-    y = guide_axis(minor.ticks = TRUE, cap = "both"),
-    color = guide_legend(override.aes = list(linewidth = 1.4))
-  ) +
-  labs(x = "Season", y = "Mean Temperature (Celsius)",
-       color = "Year",
-       title = "Mean Daily Sea Surface Temperature, North Atlantic Ocean, 1981-2024",
-       subtitle = "Gridded and weighted NOAA OISST v2.1 estimates",
-       caption = "Data processed with R; Figure made with ggplot") +
-  theme(axis.line = element_line(color = "gray30", linewidth = rel(1)))
-
 # ## Checks
 # atl_array <- tmp_array_sst[lon > lon_2, lat > lat_1 & lat < lat_2]
 # atl_grid <- expand.grid(lon = lon[lon > lon_2],
@@ -194,7 +168,7 @@ dfp |>
 # lattice::levelplot(tmp_array_sst ~ lon * lat, data = grid, pretty = T)
 
 
-### Alternative: do all the seas FAST with rasterize() and zonal()
+### Alternative: do ALL the seas FAST with rasterize() and zonal()
 
 ## Seas of the world polygons
 seas <- sf::read_sf(here("raw", "World_Seas_IHO_v3")) #|>
@@ -338,4 +312,35 @@ out <- seameans_df |>
 ggsave(here("figures", "all_seas.pdf"), out, width = 40, height = 40)
 
 ggsave(here("figures", "all_seas.png"), out, width = 40, height = 40, dpi = 300)
+
+
+
+## North Atlantic only
+dfp <- df
+
+
+out_atlantic <- dfp |>
+  mutate(year_flag = case_when(
+    year == 2023 ~ "2023",
+    year == 2024 ~ "2024",
+    .default = "All other years"
+  )) |>
+  ggplot(aes(x = yrday, y = wt_mean_sst, group = year, color = year_flag)) +
+  geom_line(linewidth = rel(1.1)) +
+  scale_x_continuous(breaks = month_labs$yrday, labels = month_labs$month_lab) +
+  scale_color_manual(values = c("orange", "firebrick", "lightblue")) +
+  guides(
+    x = guide_axis(cap = "both"),
+    y = guide_axis(minor.ticks = TRUE, cap = "both"),
+    color = guide_legend(override.aes = list(linewidth = 2))
+  ) +
+  labs(x = "Month", y = "Mean Temperature (Celsius)",
+       color = "Year",
+       title = "Mean Daily Sea Surface Temperature, North Atlantic Ocean, 1981-2024",
+       subtitle = "Gridded and weighted NOAA OISST v2.1 estimates",
+       caption = "Kieran Healy / @kjhealy") +
+  theme(axis.line = element_line(color = "gray30", linewidth = rel(1)))
+
+ggsave(here("figures", "north_atlantic.png"), out_atlantic, height = 7, width = 10, dpi = 300)
+
 
