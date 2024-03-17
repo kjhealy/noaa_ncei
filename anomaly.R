@@ -110,63 +110,14 @@ library(CFtime)
 library(terra)
 
 
-
-## Single slice. Defaults to North Atlantic rectangle
-## I'll keep this fn here, but I won't use it: the Terra way is faster
-get_anom <- function(fname, lat_1=0, lat_2=60, lon_1=0, lon_2=280) {
-  dname_sst <- "sst"
-  dname_anom <- "anom"
-
-  ncin <- nc_open(fname)
-
-  lon <- ncvar_get(ncin,"lon")
-  lat <- ncvar_get(ncin,"lat")
-  time <- ncvar_get(ncin,"time")
-  tunits <- ncatt_get(ncin,"time","units")
-
-  tmp_array_sst <- ncvar_get(ncin,dname_sst)
-  fillvalue_dl_sst <- ncatt_get(ncin,dname_sst,"_FillValue")
-
-  tmp_array_anom <- ncvar_get(ncin,dname_anom)
-  fillvalue_dl_anom <- ncatt_get(ncin,dname_anom,"_FillValue")
-
-  timestamp <- CFtimestamp(CFtime(tunits$value, calendar = "proleptic_gregorian", time))
-
-  tmp_array_sst[tmp_array_sst==fillvalue_dl_sst$value] <- NA
-  tmp_array_anom[tmp_array_anom==fillvalue_dl_anom$value] <- NA
-
-  lon_sset <- lon[lon > lon_2]
-  lat_sset <- lat[lat > lat_1 & lat < lat_2]
-  lonlat_sset <- expand.grid(lon = lon_sset, lat = lat_sset)
-
-  tmp_vec_anom <- as.vector(tmp_array_anom[lon > lon_2, lat > lat_1 & lat < lat_2])
-  tmp_vec_sst <- as.vector(tmp_array_sst[lon > lon_2, lat > lat_1 & lat < lat_2])
-
-  tibble(
-    lon = lonlat_sset$lon,
-    lat = lonlat_sset$lat,
-    anom = tmp_vec_anom,
-    sst = tmp_vec_sst,
-    wt = cos(lat * (pi/180))) |>
-    summarize(date = lubridate::as_datetime(timestamp),
-              mean_anom = mean(anom, na.rm = TRUE),
-              mean_sst = mean(sst, na.rm = TRUE),
-              wt_mean_anom = weighted.mean(anom, wt, na.rm = TRUE),
-              wt_mean_sst = weighted.mean(sst, wt, na.rm = TRUE))
-
-}
-
 ## The Terra way. Should be considerably faster. (And it is)
 ## Even faster with the chunked names, to maximize layered raster processing,
 ## Chunks of 25 elements or so seem to work quickly enough.
-seas <- sf::read_sf(here("raw", "World_Seas_IHO_v3"))
-seas_vect <- terra::vect(seas)
-
-process_raster <- function(fnames, crop_area = crop_bb, var = "sst") {
+process_raster <- function(fnames, crop_area = c(-80, 0, 0, 60), var = "sst") {
 
   tdf <- terra::rast(fnames)[var] |>
     terra::rotate() |>   # Fix 0-360 lon
-    terra::crop(crop_bb) # Atlantic region
+    terra::crop(crop_bb) # Manually crop to a defined box. Default is Atlantic lat/lon box
 
   wts <- terra::cellSize(tdf, unit = "km") # For scaling
 
@@ -183,7 +134,6 @@ process_raster <- function(fnames, crop_area = crop_bb, var = "sst") {
 ## All the daily .nc files we downloaded:
 all_fnames <- fs::dir_ls(here("raw"), recurse = TRUE, glob = "*.nc")
 chunked_fnames <- chunk(all_fnames, 25)
-
 
 ## Atlantic box
 crop_bb <- c(-80, 0, 0, 60)
@@ -205,15 +155,6 @@ df <- future_map(chunked_fnames, process_raster) |>
          yrday = lubridate::yday(date),
          season = season(date))
 tictoc::toc()
-
-# tictoc::tic("NCDF4 Method")
-# ## wheeee
-# ## Process >15,000 files
-# df_ncdf <- future_map(all_fnames, get_anom) |>
-#   list_rbind()
-#
-# df_ncdf
-# tictoc::toc()
 
 ## Save out as a csv
 write_csv(df, file = here("data", "sst_means.csv"))
@@ -253,14 +194,15 @@ dfp |>
 # lattice::levelplot(tmp_array_sst ~ lon * lat, data = grid, pretty = T)
 
 
+### Alternative: do all the seas FAST with rasterize() and zonal()
 
-## Seas of the world?
-seas <- sf::read_sf(here("raw", "World_Seas_IHO_v3")) |>
-  filter(NAME %in% c("South Atlantic Ocean",
-                     "South Pacific Ocean",
-                     "Indian Ocean",
-                     "North Pacific Ocean",
-                     "North Atlantic Ocean"))
+## Seas of the world polygons
+seas <- sf::read_sf(here("raw", "World_Seas_IHO_v3")) #|>
+  # filter(NAME %in% c("South Atlantic Ocean",
+  #                    "South Pacific Ocean",
+  #                    "Indian Ocean",
+  #                    "North Pacific Ocean",
+  #                    "North Atlantic Ocean"))
 
 seas_ids <- tibble(
   ID = c(1:5),
@@ -271,19 +213,26 @@ seas_ids <- tibble(
           "North Atlantic Ocean")
 )
 
+## Rasterize the seas polygons using one of the nc files
+## as a reference grid for the rasterization process
+one_raster <- all_fnames[1]
+seas_vect <- terra::vect(seas)
+tmp_tdf_seas <- terra::rast(one_raster)["sst"] |>
+  rotate()
+seas_zonal <- rasterize(seas_vect, tmp_tdf_seas, "NAME")
+
+# Take a look
+plot(seas_zonal)
+
 # Need to wrap the object (because C++ pointers)
 # If we don't do this it can't be passed around
 # across the processes that future_map() will spawn
-seas_vect <- wrap(terra::vect(seas))
-
-seas_vect <- terra::vect(seas)
-tmp_tdf_seas <- terra::rast(fnames)[var] |>
-  rotate()
-seas_zonal <- rasterize(seas_vect, tmp_tdf_seas, "NAME")
+#seas_vect <- wrap(terra::vect(seas))
 seas_zonal_wrapped <- wrap(seas_zonal)
 
-# This is WAY Quicker than extract()
-process_raster_seas_zonal <- function(fnames, var = "sst") {
+
+# This is WAY Quicker than the extract() method
+process_raster_zonal <- function(fnames, var = "sst") {
 
   tdf_seas <- terra::rast(fnames)[var] |>
     terra::rotate() |>
@@ -295,8 +244,9 @@ process_raster_seas_zonal <- function(fnames, var = "sst") {
 
 }
 
+## About 50 seconds!
 tictoc::tic("big op")
-seameans_df <- future_map(chunked_fnames, process_raster_seas_zonal) |>
+seameans_df <- future_map(chunked_fnames, process_raster_zonal) |>
   list_rbind() |>
   mutate(date = str_remove(date, "d_"),
          date = ymd(date),
@@ -317,19 +267,21 @@ month_labs <- seameans_df |>
   select(date, year, yrday, month, day) |>
   mutate(month_lab = month(date, label = TRUE, abbr = TRUE))
 
+main_oceans <- c(
+  "North Atlantic Ocean",
+  "South Atlantic Ocean",
+  "North Pacific Ocean",
+  "South Pacific Ocean",
+  "Indian Ocean")
 
 out <- seameans_df |>
+  filter(sea %in% main_oceans) |>
   mutate(year_flag = case_when(
     year == 2023 ~ "2023",
     year == 2024 ~ "2024",
     .default = "All other years"
   ),
-  sea_f = factor(sea, levels = c(
-    "North Atlantic Ocean",
-    "South Atlantic Ocean",
-    "North Pacific Ocean",
-    "South Pacific Ocean",
-    "Indian Ocean"), ordered = TRUE)) |>
+  sea_f = factor(sea, levels = main_oceans, ordered = TRUE)) |>
   filter(sea != "Indian Ocean") |>
   ggplot(aes(x = yrday, y = sst_wt_mean, group = year, color = year_flag)) +
   geom_line(linewidth = rel(0.5)) +
@@ -354,3 +306,36 @@ out <- seameans_df |>
 ggsave(here("figures", "four_oceans.pdf"), out, width = 10, height = 10)
 
 ggsave(here("figures", "four_oceans.png"), out, width = 10, height = 10, dpi = 300)
+
+
+
+## All the world's oceans and seas
+out <- seameans_df |>
+  mutate(year_flag = case_when(
+    year == 2023 ~ "2023",
+    year == 2024 ~ "2024",
+    .default = "All other years")) |>
+  ggplot(aes(x = yrday, y = sst_wt_mean, group = year, color = year_flag)) +
+  geom_line(linewidth = rel(0.5)) +
+  scale_x_continuous(breaks = month_labs$yrday, labels = month_labs$month_lab) +
+  scale_color_manual(values = c("orange", "firebrick", "skyblue")) +
+  guides(
+    x = guide_axis(cap = "both"),
+    y = guide_axis(minor.ticks = TRUE, cap = "both"),
+    color = guide_legend(override.aes = list(linewidth = 1.4))
+  ) +
+  facet_wrap(~ reorder(sea, sst_wt_mean), axes = "all_x", axis.labels = "all_y") +
+  labs(x = "Month of the Year", y = "Mean Temperature (Celsius)",
+       color = "Year",
+       title = "Mean Daily Sea Surface Temperatures, 1981-2024",
+       subtitle = "Area-weighted 0.25° grid estimates; NOAA OISST v2.1; IHO Sea Boundaries",
+       caption = "Data processed with R; Figure made with ggplot by Kieran Healy / @kjhealy") +
+  theme(axis.line = element_line(color = "gray30", linewidth = rel(1)),
+        strip.text = element_text(face = "bold", size = rel(1.4)),
+        plot.title = element_text(size = rel(1.525)),
+        plot.subtitle = element_text(size = rel(1.1)))
+
+ggsave(here("figures", "all_seas.pdf"), out, width = 40, height = 40)
+
+ggsave(here("figures", "all_seas.png"), out, width = 40, height = 40, dpi = 300)
+
