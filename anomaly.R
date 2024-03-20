@@ -117,7 +117,7 @@ process_raster <- function(fnames, crop_area = c(-80, 0, 0, 60), var = "sst") {
 
   tdf <- terra::rast(fnames)[var] |>
     terra::rotate() |>   # Fix 0-360 lon
-    terra::crop(crop_bb) # Manually crop to a defined box. Default is Atlantic lat/lon box
+    terra::crop(crop_area) # Manually crop to a defined box. Default is Atlantic lat/lon box
 
   wts <- terra::cellSize(tdf, unit = "km") # For scaling
 
@@ -125,7 +125,7 @@ process_raster <- function(fnames, crop_area = c(-80, 0, 0, 60), var = "sst") {
     date = terra::time(tdf),
     # global() calculates a quantity for the whole grid on a particular SpatRaster
     # so we get one weighted mean per file that comes in
-    wt_mean_sst = global(tdf, "mean", weights = wts, na.rm=TRUE)$weighted_mean
+    wt_mean_sst = terra::global(tdf, "mean", weights = wts, na.rm=TRUE)$weighted_mean
   )
 
 }
