@@ -116,8 +116,10 @@ library(terra)
 
 layerinfo <- tibble(
   num = c(1:4),
-  raw_name = c("anom_zlev=0", "err_zlev=0", "ice_zlev=0", "sst_zlev=0"),
-  name = c("anom", "err", "ice", "sst"))
+  raw_name = c("anom_zlev=0", "err_zlev=0",
+               "ice_zlev=0", "sst_zlev=0"),
+  name = c("anom", "err",
+           "ice", "sst"))
 
 
 ## The Terra way. Should be considerably faster. (And it is)
@@ -126,8 +128,8 @@ layerinfo <- tibble(
 process_raster <- function(fnames, crop_area = c(-80, 0, 0, 60), layerinfo = layerinfo) {
 
   tdf <- terra::rast(fnames) |>
-    terra::rotate() |>   # Fix 0-360 lon
-    terra::crop(crop_area) # Manually crop to a defined box. Default is Atlantic lat/lon box
+    terra::rotate() |>   # Convert 0 to 360 lon to -180 to +180 lon
+    terra::crop(crop_area) # Manually crop to a defined box.  Default is roughly N. Atlantic lat/lon box
 
   wts <- terra::cellSize(tdf, unit = "km") # For scaling
 
@@ -137,8 +139,9 @@ process_raster <- function(fnames, crop_area = c(-80, 0, 0, 60), layerinfo = lay
              means = terra::global(tdf, "mean", weights = wts, na.rm=TRUE))
   out$var <- rownames(out)
   out$var <- gsub("_.*", "", out$var)
-  out <- reshape(out, idvar = "date", timevar = "var",
-          direction = "wide")
+  out <- reshape(out, idvar = "date",
+                 timevar = "var",
+                 direction = "wide")
 
   colnames(out) <- gsub("weighted_mean\\.", "", colnames(out))
   out
@@ -173,23 +176,10 @@ tictoc::toc()
 ## Save out as a csv
 write_csv(df, file = here("data", "natl_means.csv"))
 
-### Alternative: do ALL the seas FAST with rasterize() and zonal()
-## Seas of the world polygons
-seas <- sf::read_sf(here("raw", "World_Seas_IHO_v3")) #|>
-  # filter(NAME %in% c("South Atlantic Ocean",
-  #                    "South Pacific Ocean",
-  #                    "Indian Ocean",
-  #                    "North Pacific Ocean",
-  #                    "North Atlantic Ocean"))
-
-seas_ids <- tibble(
-  ID = c(1:5),
-  sea = c("South Atlantic Ocean",
-          "South Pacific Ocean",
-          "Indian Ocean",
-          "North Pacific Ocean",
-          "North Atlantic Ocean")
-)
+### Do ALL the seas with rasterize() and zonal()
+## Seas of the world polygons from https://www.marineregions.org/downloads.php,
+## IHO Sea Areas V3 shapefile.
+seas <- sf::read_sf(here("raw", "World_Seas_IHO_v3"))
 
 ## Rasterize the seas polygons using one of the nc files
 ## as a reference grid for the rasterization process
@@ -205,27 +195,28 @@ plot(seas_zonal)
 # Need to wrap the object (because C++ pointers)
 # If we don't do this it can't be passed around
 # across the processes that future_map() will spawn
-#seas_vect <- wrap(terra::vect(seas))
 seas_zonal_wrapped <- wrap(seas_zonal)
 
 
-# This is WAY Quicker than the extract() method
+# This is much faster than using extract()
 process_raster_zonal <- function(fnames) {
 
   d <- terra::rast(fnames)
   wts <- terra::cellSize(d, unit = "km") # For scaling
 
-  layer_varnames <- terra::varnames(d)
-  date_seq <- rep(terra::time(d))
-  # These are the new colnames zonal post-calculation below
+  layer_varnames <- terra::varnames(d) # vector of layers
+  date_seq <- rep(terra::time(d)) # vector of dates
+
+  # New colnames for use post zonal calculation below
   new_colnames <- c("sea", paste(layer_varnames, date_seq, sep = "_"))
 
+  # Better colnames
   tdf_seas <- d |>
-    terra::rotate() |>   # Fix 0-360 lon
+    terra::rotate() |>   # Convert 0 to 360 lon to -180 to +180 lon
     terra::zonal(unwrap(seas_zonal_wrapped), mean, na.rm = TRUE)
-
   colnames(tdf_seas) <- new_colnames
 
+  # Reshape to long
   tdf_seas |>
     tidyr::pivot_longer(-sea,
                         names_to = c("measure", "date"),
@@ -294,9 +285,7 @@ out <- seameans_df |>
         plot.subtitle = element_text(size = rel(1.1)))
 
 ggsave(here("figures", "four_oceans.pdf"), out, width = 10, height = 10)
-
 ggsave(here("figures", "four_oceans.png"), out, width = 10, height = 10, dpi = 300)
-
 
 
 ## All the world's oceans and seas
@@ -326,13 +315,13 @@ out <- seameans_df |>
         plot.subtitle = element_text(size = rel(1.1)))
 
 ggsave(here("figures", "all_seas.pdf"), out, width = 40, height = 40)
-
 ggsave(here("figures", "all_seas.png"), out, width = 40, height = 40, dpi = 300)
 
 
 
 ## North Atlantic only
-out_atlantic <- df |>
+out_atlantic <- seameans_df |>
+  filter(sea == "North Atlantic Ocean") |>
   mutate(year_flag = case_when(
     year == 2023 ~ "2023",
     year == 2024 ~ "2024",
