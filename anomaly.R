@@ -247,7 +247,8 @@ seameans_df <- future_map(chunked_fnames, process_raster_zonal) |>
          season = season(date))
 tictoc::toc()
 
-write_csv(seameans_df, file = here("data", "oceans_sst_means_zonal.csv"))
+write_csv(seameans_df, file = here("data", "oceans_means_zonal.csv"))
+save(seameans_df, file = here("data", "seameans_df.Rdata"), compress = "xz")
 
 month_labs <- seameans_df |>
   filter(sea == "North Atlantic Ocean",
@@ -272,7 +273,7 @@ out <- seameans_df |>
   ),
   sea_f = factor(sea, levels = main_oceans, ordered = TRUE)) |>
   filter(sea != "Indian Ocean") |>
-  ggplot(aes(x = yrday, y = sst_wt_mean, group = year, color = year_flag)) +
+  ggplot(aes(x = yrday, y = sst, group = year, color = year_flag)) +
   geom_line(linewidth = rel(0.5)) +
   scale_x_continuous(breaks = month_labs$yrday, labels = month_labs$month_lab) +
   scale_color_manual(values = c("orange", "firebrick", "skyblue")) +
@@ -304,7 +305,7 @@ out <- seameans_df |>
     year == 2023 ~ "2023",
     year == 2024 ~ "2024",
     .default = "All other years")) |>
-  ggplot(aes(x = yrday, y = sst_wt_mean, group = year, color = year_flag)) +
+  ggplot(aes(x = yrday, y = sst, group = year, color = year_flag)) +
   geom_line(linewidth = rel(0.5)) +
   scale_x_continuous(breaks = month_labs$yrday, labels = month_labs$month_lab) +
   scale_color_manual(values = c("orange", "firebrick", "skyblue")) +
@@ -313,7 +314,7 @@ out <- seameans_df |>
     y = guide_axis(minor.ticks = TRUE, cap = "both"),
     color = guide_legend(override.aes = list(linewidth = 1.4))
   ) +
-  facet_wrap(~ reorder(sea, sst_wt_mean), axes = "all_x", axis.labels = "all_y") +
+  facet_wrap(~ reorder(sea, sst), axes = "all_x", axis.labels = "all_y") +
   labs(x = "Month of the Year", y = "Mean Temperature (Celsius)",
        color = "Year",
        title = "Mean Daily Sea Surface Temperatures, 1981-2024",
@@ -331,16 +332,13 @@ ggsave(here("figures", "all_seas.png"), out, width = 40, height = 40, dpi = 300)
 
 
 ## North Atlantic only
-dfp <- df
-
-
-out_atlantic <- dfp |>
+out_atlantic <- df |>
   mutate(year_flag = case_when(
     year == 2023 ~ "2023",
     year == 2024 ~ "2024",
     .default = "All other years"
   )) |>
-  ggplot(aes(x = yrday, y = wt_mean_sst, group = year, color = year_flag)) +
+  ggplot(aes(x = yrday, y = sst, group = year, color = year_flag)) +
   geom_line(linewidth = rel(1.1)) +
   scale_x_continuous(breaks = month_labs$yrday, labels = month_labs$month_lab) +
   scale_color_manual(values = c("orange", "firebrick", "lightblue")) +
