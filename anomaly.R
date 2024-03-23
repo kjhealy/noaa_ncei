@@ -56,7 +56,8 @@ clean_prelims <- function(subdir) {
   local <- here::here("raw/www.ncei.noaa.gov/data/sea-surface-temperature-optimum-interpolation/v2.1/access/avhrr/")
   path <- paste0(local, subdir)
 
-  complete_nc_files <- basename(fs::dir_ls(path, regexp = "index|._preliminary.nc", invert = TRUE))
+  complete_nc_files <- c(basename(fs::dir_ls(path, glob = "index", invert = TRUE)),
+                         basename(fs::dir_ls(path, glob = "preliminary.nc")))
   prelim_nc_files <- basename(fs::dir_ls(path, glob = "*_preliminary.nc"))
 
   # Complete exists
@@ -66,14 +67,18 @@ clean_prelims <- function(subdir) {
   ## Deletion
   deletion_candidates <- str_detect(prelim_nc_files, complete_dates_regexp)
   delete_these <- prelim_nc_files[deletion_candidates]
-  if(!rlang::is_empty(delete_these)) fs::file_delete(paste0(path, "/", prelim_nc_files[delete_these]))
+  if(!rlang::is_empty(delete_these)) fs::file_delete(paste0(path, "/", delete_these))
 
 }
 
 # Update the files
 # February
-# get_nc_files(subdir = "202402")
-# clean_prelims(subdir = "202402")
+#get_nc_files(subdir = "202402")
+#clean_prelims(subdir = "202402")
+
+#get_nc_files(subdir = "202403")
+#clean_prelims(subdir = "202403")
+
 
 ## Seasons for plotting
 season <-  function(in_date){
