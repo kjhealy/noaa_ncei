@@ -114,25 +114,34 @@ library(ncdf4)
 library(CFtime)
 library(terra)
 
+layerinfo <- tibble(
+  num = c(1:4),
+  raw_name = c("anom_zlev=0", "err_zlev=0", "ice_zlev=0", "sst_zlev=0"),
+  name = c("anom", "err", "ice", "sst"))
+
 
 ## The Terra way. Should be considerably faster. (And it is)
 ## Even faster with the chunked names, to maximize layered raster processing,
 ## Chunks of 25 elements or so seem to work quickly enough.
-process_raster <- function(fnames, crop_area = c(-80, 0, 0, 60), var = "sst") {
+process_raster <- function(fnames, crop_area = c(-80, 0, 0, 60), layerinfo = layerinfo) {
 
-  tdf <- terra::rast(fnames)[var] |>
+  tdf <- terra::rast(fnames) |>
     terra::rotate() |>   # Fix 0-360 lon
     terra::crop(crop_area) # Manually crop to a defined box. Default is Atlantic lat/lon box
 
   wts <- terra::cellSize(tdf, unit = "km") # For scaling
 
-  data.frame(
-    date = terra::time(tdf),
-    # global() calculates a quantity for the whole grid on a particular SpatRaster
-    # so we get one weighted mean per file that comes in
-    wt_mean_sst = terra::global(tdf, "mean", weights = wts, na.rm=TRUE)$weighted_mean
-  )
+  # global() calculates a quantity for the whole grid on a particular SpatRaster
+  # so we get one weighted mean per file that comes in
+  out <- data.frame(date = terra::time(tdf),
+             means = terra::global(tdf, "mean", weights = wts, na.rm=TRUE))
+  out$var <- rownames(out)
+  out$var <- gsub("_.*", "", out$var)
+  out <- reshape(out, idvar = "date", timevar = "var",
+          direction = "wide")
 
+  colnames(out) <- gsub("weighted_mean\\.", "", colnames(out))
+  out
 }
 
 ## Filenames
@@ -162,19 +171,9 @@ df <- future_map(chunked_fnames, process_raster) |>
 tictoc::toc()
 
 ## Save out as a csv
-write_csv(df, file = here("data", "sst_means.csv"))
-
-# ## Checks
-# atl_array <- tmp_array_sst[lon > lon_2, lat > lat_1 & lat < lat_2]
-# atl_grid <- expand.grid(lon = lon[lon > lon_2],
-# lattice::levelplot(atl_array ~ lon * lat, data = atl_grid, pretty = T)
-# grid <- expand.grid(lon = lon,
-#                     lat = lat)
-# lattice::levelplot(tmp_array_sst ~ lon * lat, data = grid, pretty = T)
-
+write_csv(df, file = here("data", "natl_means.csv"))
 
 ### Alternative: do ALL the seas FAST with rasterize() and zonal()
-
 ## Seas of the world polygons
 seas <- sf::read_sf(here("raw", "World_Seas_IHO_v3")) #|>
   # filter(NAME %in% c("South Atlantic Ocean",
@@ -211,30 +210,41 @@ seas_zonal_wrapped <- wrap(seas_zonal)
 
 
 # This is WAY Quicker than the extract() method
-process_raster_zonal <- function(fnames, var = "sst") {
+process_raster_zonal <- function(fnames) {
 
-  tdf_seas <- terra::rast(fnames)[var] |>
-    terra::rotate() |>
-    zonal(unwrap(seas_zonal_wrapped), mean, na.rm = TRUE)
+  d <- terra::rast(fnames)
+  wts <- terra::cellSize(d, unit = "km") # For scaling
 
-  colnames(tdf_seas) <- c("ID", paste0("d_", terra::time(terra::rast(fnames)[var])))
+  layer_varnames <- terra::varnames(d)
+  date_seq <- rep(terra::time(d))
+  # These are the new colnames zonal post-calculation below
+  new_colnames <- c("sea", paste(layer_varnames, date_seq, sep = "_"))
+
+  tdf_seas <- d |>
+    terra::rotate() |>   # Fix 0-360 lon
+    terra::zonal(unwrap(seas_zonal_wrapped), mean, na.rm = TRUE)
+
+  colnames(tdf_seas) <- new_colnames
+
   tdf_seas |>
-    pivot_longer(-ID, names_to = "date", values_to = "sst_wt_mean")
+    tidyr::pivot_longer(-sea,
+                        names_to = c("measure", "date"),
+                        values_to = "value",
+                        names_pattern ="(.*)_(.*)") |>
+    tidyr::pivot_wider(names_from = measure, values_from = value)
 
 }
 
-## About 50 seconds!
+## Parallelized, but even so, be patient.
 tictoc::tic("big op")
 seameans_df <- future_map(chunked_fnames, process_raster_zonal) |>
   list_rbind() |>
-  mutate(date = str_remove(date, "d_"),
-         date = ymd(date),
+  mutate(date = ymd(date),
          year = lubridate::year(date),
          month = lubridate::month(date),
          day = lubridate::day(date),
          yrday = lubridate::yday(date),
-         season = season(date)) |>
-  rename(sea = ID)
+         season = season(date))
 tictoc::toc()
 
 write_csv(seameans_df, file = here("data", "oceans_sst_means_zonal.csv"))
