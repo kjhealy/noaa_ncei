@@ -9,6 +9,13 @@ library(here)
 library(furrr)
 plan(multisession)
 
+## For the raster data
+library(ncdf4)
+library(CFtime)
+library(terra)
+
+
+
 ## Plot setup
 library(systemfonts)
 clear_registry()
@@ -29,6 +36,12 @@ import_myriad_semi()
 import_myriad_condensed()
 
 theme_set(theme_myriad_semi())
+
+
+colors <- ggokabeito::palette_okabe_ito()
+scales::show_col(colors)
+
+
 
 ## Functions
 get_nc_files <- function(url = "https://www.ncei.noaa.gov/data/sea-surface-temperature-optimum-interpolation/v2.1/access/avhrr/",
@@ -79,15 +92,6 @@ clean_prelims <- function(subdir) {
 
 }
 
-# Update the files
-# February
-#get_nc_files(subdir = "202402")
-#clean_prelims(subdir = "202402")
-
-#get_nc_files(subdir = "202403")
-#clean_prelims(subdir = "202403")
-
-
 ## Seasons for plotting
 season <-  function(in_date){
   br = yday(as.Date(c("2019-03-01",
@@ -114,22 +118,6 @@ chunk <- function(x, n) split(x, ceiling(seq_along(x)/n))
 ## This one gives you n chunks each with an approx equal but unknown number of elements
 chunk2 <- function(x, n) split(x, cut(seq_along(x), n, labels = FALSE))
 
-
-
-
-## For the raster data
-library(ncdf4)
-library(CFtime)
-library(terra)
-
-layerinfo <- tibble(
-  num = c(1:4),
-  raw_name = c("anom_zlev=0", "err_zlev=0",
-               "ice_zlev=0", "sst_zlev=0"),
-  name = c("anom", "err",
-           "ice", "sst"))
-
-
 ## The Terra way. Should be considerably faster. (And it is)
 ## Even faster with the chunked names, to maximize layered raster processing,
 ## Chunks of 25 elements or so seem to work quickly enough.
@@ -144,7 +132,7 @@ process_raster <- function(fnames, crop_area = c(-80, 0, 0, 60), layerinfo = lay
   # global() calculates a quantity for the whole grid on a particular SpatRaster
   # so we get one weighted mean per file that comes in
   out <- data.frame(date = terra::time(tdf),
-             means = terra::global(tdf, "mean", weights = wts, na.rm=TRUE))
+                    means = terra::global(tdf, "mean", weights = wts, na.rm=TRUE))
   out$var <- rownames(out)
   out$var <- gsub("_.*", "", out$var)
   out <- reshape(out, idvar = "date",
@@ -154,57 +142,6 @@ process_raster <- function(fnames, crop_area = c(-80, 0, 0, 60), layerinfo = lay
   colnames(out) <- gsub("weighted_mean\\.", "", colnames(out))
   out
 }
-
-## Filenames
-## All the daily .nc files we downloaded:
-all_fnames <- fs::dir_ls(here("raw"), recurse = TRUE, glob = "*.nc")
-chunked_fnames <- chunk(all_fnames, 25)
-
-## Atlantic box
-crop_bb <- c(-80, 0, 0, 60)
-
-# Try one only
-chk <- process_raster(chunked_fnames[[500]])
-chk
-
-## wheeee
-## Process >15,000 files
-tictoc::tic("Terra Method")
-df <- future_map(chunked_fnames, process_raster) |>
-  list_rbind() |>
-  as_tibble() |>
-  mutate(date = ymd(date),
-         year = lubridate::year(date),
-         month = lubridate::month(date),
-         day = lubridate::day(date),
-         yrday = lubridate::yday(date),
-         season = season(date))
-tictoc::toc()
-
-## Save out as a csv
-write_csv(df, file = here("data", "natl_means.csv"))
-
-### Do ALL the seas with rasterize() and zonal()
-## Seas of the world polygons from https://www.marineregions.org/downloads.php,
-## IHO Sea Areas V3 shapefile.
-seas <- sf::read_sf(here("raw", "World_Seas_IHO_v3"))
-
-## Rasterize the seas polygons using one of the nc files
-## as a reference grid for the rasterization process
-one_raster <- all_fnames[1]
-seas_vect <- terra::vect(seas)
-tmp_tdf_seas <- terra::rast(one_raster)["sst"] |>
-  rotate()
-seas_zonal <- rasterize(seas_vect, tmp_tdf_seas, "NAME")
-
-# Take a look
-plot(seas_zonal)
-
-# Need to wrap the object (because C++ pointers)
-# If we don't do this it can't be passed around
-# across the processes that future_map() will spawn
-seas_zonal_wrapped <- wrap(seas_zonal)
-
 
 # This is much faster than using extract()
 process_raster_zonal <- function(fnames) {
@@ -234,6 +171,83 @@ process_raster_zonal <- function(fnames) {
 
 }
 
+
+layerinfo <- tibble(
+  num = c(1:4),
+  raw_name = c("anom_zlev=0", "err_zlev=0",
+               "ice_zlev=0", "sst_zlev=0"),
+  name = c("anom", "err",
+           "ice", "sst"))
+
+
+### Start the analysis.
+
+# Update the files
+# February
+#get_nc_files(subdir = "202402")
+#clean_prelims(subdir = "202402")
+
+#get_nc_files(subdir = "202403")
+#clean_prelims(subdir = "202403")
+
+# Get filenames
+# All the daily .nc files we downloaded:
+all_fnames <- fs::dir_ls(here("raw"), recurse = TRUE, glob = "*.nc")
+chunked_fnames <- chunk(all_fnames, 25)
+
+
+## North Atlantic
+
+## Atlantic box
+crop_bb <- c(-80, 0, 0, 60)
+
+
+# Try one only
+chk <- process_raster(chunked_fnames[[500]])
+chk
+
+## wheeee
+## Process >15,000 files
+tictoc::tic("Terra Method")
+df <- future_map(chunked_fnames, process_raster) |>
+  list_rbind() |>
+  as_tibble() |>
+  mutate(date = ymd(date),
+         year = lubridate::year(date),
+         month = lubridate::month(date),
+         day = lubridate::day(date),
+         yrday = lubridate::yday(date),
+         season = season(date))
+tictoc::toc()
+
+## Save out as a csv
+write_csv(df, file = here("data", "natl_means.csv"))
+
+
+## All the seas
+
+# All the seas with rasterize() and zonal()
+# Seas of the world polygons from https://www.marineregions.org/downloads.php,
+# IHO Sea Areas V3 shapefile.
+seas <- sf::read_sf(here("raw", "World_Seas_IHO_v3"))
+
+## Rasterize the seas polygons using one of the nc files
+## as a reference grid for the rasterization process
+one_raster <- all_fnames[1]
+seas_vect <- terra::vect(seas)
+tmp_tdf_seas <- terra::rast(one_raster)["sst"] |>
+  rotate()
+seas_zonal <- rasterize(seas_vect, tmp_tdf_seas, "NAME")
+
+# Take a look
+plot(seas_zonal)
+
+# Need to wrap the object (because C++ pointers)
+# If we don't do this it can't be passed around
+# across the processes that future_map() will spawn
+seas_zonal_wrapped <- wrap(seas_zonal)
+
+
 ## Parallelized, but even so, be patient.
 tictoc::tic("big op")
 seameans_df <- future_map(chunked_fnames, process_raster_zonal) |>
@@ -248,6 +262,32 @@ tictoc::toc()
 
 write_csv(seameans_df, file = here("data", "oceans_means_zonal.csv"))
 save(seameans_df, file = here("data", "seameans_df.Rdata"), compress = "xz")
+
+
+## World average
+
+# World box (60S 60N)
+world_crop_bb <- c(-180, 180, -60, 60)
+
+tictoc::tic("Terra Method")
+world_df <- future_map(chunked_fnames, process_raster,
+                       crop_area = world_crop_bb) |>
+  list_rbind() |>
+  as_tibble() |>
+  mutate(date = ymd(date),
+         year = lubridate::year(date),
+         month = lubridate::month(date),
+         day = lubridate::day(date),
+         yrday = lubridate::yday(date),
+         season = season(date))
+tictoc::toc()
+
+write_csv(out_world, file = here("data", "global_means_60S60N.csv"))
+
+###
+
+### Graphs
+
 
 month_labs <- seameans_df |>
   filter(sea == "North Atlantic Ocean",
@@ -275,7 +315,7 @@ out <- seameans_df |>
   ggplot(aes(x = yrday, y = sst, group = year, color = year_flag)) +
   geom_line(linewidth = rel(0.5)) +
   scale_x_continuous(breaks = month_labs$yrday, labels = month_labs$month_lab) +
-  scale_color_manual(values = c("orange", "firebrick", "skyblue")) +
+  scale_color_manual(values = colors[c(1,6,2)]) +
   guides(
     x = guide_axis(cap = "both"),
     y = guide_axis(minor.ticks = TRUE, cap = "both"),
@@ -305,7 +345,7 @@ out <- seameans_df |>
   ggplot(aes(x = yrday, y = sst, group = year, color = year_flag)) +
   geom_line(linewidth = rel(0.5)) +
   scale_x_continuous(breaks = month_labs$yrday, labels = month_labs$month_lab) +
-  scale_color_manual(values = c("orange", "firebrick", "skyblue")) +
+  scale_color_manual(values = colors[c(1,6,2)]) +
   guides(
     x = guide_axis(cap = "both"),
     y = guide_axis(minor.ticks = TRUE, cap = "both"),
@@ -338,7 +378,7 @@ out_atlantic <- seameans_df |>
   ggplot(aes(x = yrday, y = sst, group = year, color = year_flag)) +
   geom_line(linewidth = rel(1.1)) +
   scale_x_continuous(breaks = month_labs$yrday, labels = month_labs$month_lab) +
-  scale_color_manual(values = c("orange", "firebrick", "lightblue")) +
+  scale_color_manual(values = colors[c(1,6,2)]) +
   guides(
     x = guide_axis(cap = "both"),
     y = guide_axis(minor.ticks = TRUE, cap = "both"),
@@ -356,27 +396,6 @@ ggsave(here("figures", "north_atlantic.png"), out_atlantic, height = 7, width = 
 
 ## World Graph
 
-## World box (60S 60N)
-world_crop_bb <- c(-180, 180, -60, 60)
-
-
-
-tictoc::tic("Terra Method")
-world_df <- future_map(chunked_fnames, process_raster,
-                 crop_area = world_crop_bb) |>
-  list_rbind() |>
-  as_tibble() |>
-  mutate(date = ymd(date),
-         year = lubridate::year(date),
-         month = lubridate::month(date),
-         day = lubridate::day(date),
-         yrday = lubridate::yday(date),
-         season = season(date))
-tictoc::toc()
-
-colors <- ggokabeito::palette_okabe_ito()
-
-
 world_avg <- world_df |>
   filter(year > 1981 & year < 2012) |>
   group_by(yrday) |>
@@ -391,8 +410,6 @@ out_world <- world_df |>
     year == 2023 ~ "2023",
     year == 2024 ~ "2024",
     .default = "All other years"))
-
-write_csv(out_world, file = here("data", "global_means_60S60N.csv"))
 
 
 out_world_plot <- ggplot() +
