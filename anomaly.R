@@ -56,16 +56,24 @@ clean_prelims <- function(subdir) {
   local <- here::here("raw/www.ncei.noaa.gov/data/sea-surface-temperature-optimum-interpolation/v2.1/access/avhrr/")
   path <- paste0(local, subdir)
 
-  complete_nc_files <- c(basename(fs::dir_ls(path, glob = "index", invert = TRUE)),
-                         basename(fs::dir_ls(path, glob = "preliminary.nc")))
+  all_nc_files <- basename(fs::dir_ls(path, regexp = "[.]html", invert = TRUE))
   prelim_nc_files <- basename(fs::dir_ls(path, glob = "*_preliminary.nc"))
+  final_nc_files <- all_nc_files[str_detect(all_nc_files, "_preliminary",
+                                            negate = TRUE)]
 
-  # Complete exists
-  complete_dates <- str_extract(complete_nc_files, paste0(subdir, "\\d{2}"))
-  complete_dates_regexp <- paste(complete_dates, collapse = "|")
+  prelim_nc_dates <- str_extract(prelim_nc_files,
+                                 paste0(subdir, "\\d{2}"))
+  final_nc_dates <- str_extract(final_nc_files,
+                                paste0(subdir, "\\d{2}"))
+
+  dupes <- intersect(prelim_nc_dates, final_nc_dates)
+
+  if(rlang::is_empty(dupes)) return(message("No duplicates"))
+
 
   ## Deletion
-  deletion_candidates <- str_detect(prelim_nc_files, complete_dates_regexp)
+  dupes <- paste0(dupes, collapse = "|")
+  deletion_candidates <- str_detect(prelim_nc_files, dupes)
   delete_these <- prelim_nc_files[deletion_candidates]
   if(!rlang::is_empty(delete_these)) fs::file_delete(paste0(path, "/", delete_these))
 
@@ -352,6 +360,7 @@ ggsave(here("figures", "north_atlantic.png"), out_atlantic, height = 7, width = 
 world_crop_bb <- c(-180, 180, -60, 60)
 
 
+
 tictoc::tic("Terra Method")
 world_df <- future_map(chunked_fnames, process_raster,
                  crop_area = world_crop_bb) |>
@@ -365,14 +374,17 @@ world_df <- future_map(chunked_fnames, process_raster,
          season = season(date))
 tictoc::toc()
 
+colors <- ggokabeito::palette_okabe_ito()
+
+
 world_avg <- world_df |>
   filter(year > 1981 & year < 2012) |>
   group_by(yrday) |>
   filter(yrday != 366) |>
   summarize(mean_8211 = mean(sst, na.rm = TRUE),
             sd_8211 = sd(sst, na.rm = TRUE)) |>
-  mutate(fill = "seagreen3",
-         color = "seagreen3")
+  mutate(fill = colors["green"],
+         color = colors["green"])
 
 out_world <- world_df |>
   mutate(year_flag = case_when(
@@ -395,7 +407,7 @@ out_world_plot <- ggplot() +
             mapping = aes(x = yrday,
                           y = mean_8211,
                           color = color),
-            linewidth = 2.5,
+            linewidth = 2,
             inherit.aes = FALSE) +
   scale_color_identity(name = "Mean Temp. 1982-2011, ±2SD", guide = "legend",
                        breaks = unique(world_avg$color), labels = "") +
@@ -405,7 +417,8 @@ out_world_plot <- ggplot() +
   geom_line(data = out_world,
             mapping = aes(x = yrday, y = sst, group = year, color = year_flag),
             inherit.aes = FALSE) +
-  scale_color_manual(values = c("orange", "firebrick1", "grey50")) +
+#  scale_color_manual(values = c("orange", "firebrick1", "grey50")) +
+  scale_color_manual(values = colors[c(1,6,8)]) +
   scale_x_continuous(breaks = month_labs$yrday, labels = month_labs$month_lab) +
   scale_y_continuous(breaks = seq(19.5, 21.5, 0.5),
                      limits = c(19.5, 21.5),
