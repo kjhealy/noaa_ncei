@@ -16,6 +16,16 @@ library(terra)
 
 
 ## Functions
+
+#' Get NCDF Files from NOAA
+#'
+#' @param url The enpoint URL of the AVHRR data, <https://www.ncei.noaa.gov/data/sea-surface-temperature-optimum-interpolation/v2.1/access/avhrr/>
+#' @param subdir The subdirectory of monthly data to get. A character string of digits, of the form "YYYYMM". No default.
+#'
+#' @return  A directory of NCDF files.
+#' @export
+#'
+#'
 get_nc_files <- function(url = "https://www.ncei.noaa.gov/data/sea-surface-temperature-optimum-interpolation/v2.1/access/avhrr/",
                        subdir) {
   local <- here::here("raw/www.ncei.noaa.gov/data/sea-surface-temperature-optimum-interpolation/v2.1/access/avhrr/")
