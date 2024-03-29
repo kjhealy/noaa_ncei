@@ -29,19 +29,6 @@ scales::show_col(colors)
 
 ## Setup
 
-## Seasons for plotting
-season <-  function(in_date){
-  br = yday(as.Date(c("2019-03-01",
-                      "2019-06-01",
-                      "2019-09-01",
-                      "2019-12-01")))
-  x = yday(in_date)
-  x = cut(x, breaks = c(0, br, 366))
-  levels(x) = c("Winter", "Spring", "Summer", "Autumn", "Winter")
-  x
-}
-
-
 season_lab <-  tibble(yrday = yday(as.Date(c("2019-03-01",
                                              "2019-06-01",
                                              "2019-09-01",

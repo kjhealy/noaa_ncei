@@ -19,7 +19,7 @@ library(terra)
 
 #' Get NCDF Files from NOAA
 #'
-#' @param url The enpoint URL of the AVHRR data, <https://www.ncei.noaa.gov/data/sea-surface-temperature-optimum-interpolation/v2.1/access/avhrr/>
+#' @param url The endpoint URL of the AVHRR data, <https://www.ncei.noaa.gov/data/sea-surface-temperature-optimum-interpolation/v2.1/access/avhrr/>
 #' @param subdir The subdirectory of monthly data to get. A character string of digits, of the form "YYYYMM". No default.
 #'
 #' @return  A directory of NCDF files.
@@ -142,6 +142,18 @@ process_raster_zonal <- function(fnames) {
 
 }
 
+## Seasons for plotting
+season <-  function(in_date){
+  br = yday(as.Date(c("2019-03-01",
+                      "2019-06-01",
+                      "2019-09-01",
+                      "2019-12-01")))
+  x = yday(in_date)
+  x = cut(x, breaks = c(0, br, 366))
+  levels(x) = c("Winter", "Spring", "Summer", "Autumn", "Winter")
+  x
+}
+
 
 
 
@@ -245,4 +257,4 @@ world_df <- future_map(chunked_fnames, process_raster,
          season = season(date))
 tictoc::toc()
 
-write_csv(out_world, file = here("data", "global_means_60S60N.csv"))
+write_csv(world_df, file = here("data", "global_means_60S60N.csv"))
