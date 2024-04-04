@@ -46,7 +46,15 @@ get_nc_files <- function(url = "https://www.ncei.noaa.gov/data/sea-surface-tempe
 
 }
 
-# Remove prelim files if finalized version exists
+#
+#' Remove -prelim nc files if final nc version exists
+#'
+#' @param subdir A character vector. The name of the subdirectory of .nc files you want to clean up.
+#'
+#' @return Returns "No duplicates" if there are none; otherwise silently deletes dupes.
+#' @export
+#'
+#' @examples
 clean_prelims <- function(subdir) {
   local <- here::here("raw/www.ncei.noaa.gov/data/sea-surface-temperature-optimum-interpolation/v2.1/access/avhrr/")
   path <- paste0(local, subdir)
@@ -166,6 +174,11 @@ season <-  function(in_date){
 
 #get_nc_files(subdir = "202403")
 #clean_prelims(subdir = "202403")
+
+#
+#get_nc_files(subdir = "202404")
+#clean_prelims(subdir = "202404")
+
 
 # Get filenames
 # All the daily .nc files we downloaded:
