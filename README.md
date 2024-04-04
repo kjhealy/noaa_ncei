@@ -1,4 +1,9 @@
-## NOAA Data
+## NOAA Data and graphs
+
+![](figures/global_mean.png)
+
+
+![](figures/north_atlantic.png)
 
 
 Data obtained with:
