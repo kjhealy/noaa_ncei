@@ -183,6 +183,7 @@ season <-  function(in_date){
 # Get filenames
 # All the daily .nc files we downloaded:
 all_fnames <- fs::dir_ls(here("raw"), recurse = TRUE, glob = "*.nc")
+length(all_fnames)
 chunked_fnames <- chunk(all_fnames, 25)
 
 
@@ -218,6 +219,8 @@ write_csv(df, file = here("data", "natl_means.csv"))
 # Seas of the world polygons from https://www.marineregions.org/downloads.php,
 # IHO Sea Areas V3 shapefile.
 seas <- sf::read_sf(here("raw", "World_Seas_IHO_v3"))
+
+seas
 
 ## Rasterize the seas polygons using one of the nc files
 ## as a reference grid for the rasterization process
