@@ -19,7 +19,6 @@ showtext_auto()
 library(myriad)
 import_myriad_semi()
 import_myriad_condensed()
-
 theme_set(theme_myriad_semi())
 
 
@@ -200,7 +199,6 @@ out_world_plot <- ggplot() +
   scale_y_continuous(breaks = seq(19.5, 21.5, 0.5),
                      limits = c(19.5, 21.5),
                      expand = expansion(mult = c(-0.05, 0.05))) +
-  geom_line(linewidth = rel(0.7)) +
   guides(
     x = guide_axis(cap = "both"),
     y = guide_axis(minor.ticks = TRUE, cap = "both"),
@@ -217,5 +215,39 @@ out_world_plot <- ggplot() +
 ggsave(here("figures", "global_mean.png"), out_world_plot, height = 7, width = 10, dpi = 300)
 
 
+
+
+out_world_plot_kelvin <- ggplot() +
+  geom_line(data = world_avg,
+            mapping = aes(x = yrday,
+                          y = mean_8211 + 273.15,
+                          color = color),
+            linewidth = 2,
+            inherit.aes = FALSE) +
+  scale_color_identity(name = "Mean Temp. 1982-2011, ±2SD", guide = "legend",
+                       breaks = unique(world_avg$color), labels = "") +
+  scale_fill_identity(name = "Mean Temp. 1982-2011, ±2SD", guide = "legend",
+                      breaks = unique(world_avg$fill), labels = "") +
+  scale_x_continuous(breaks = month_labs$yrday, labels = month_labs$month_lab) +
+  scale_y_continuous(breaks = c(0, 75, 175, 275, 375),
+                     labels = c("0", "75", "175", "275", "375"),
+                     limits = c(0, 375),
+                     expand = c(0,0)) +
+  guides(
+    x = guide_axis(cap = "both"),
+    y = guide_axis(minor.ticks = TRUE),
+    color = guide_legend(override.aes = list(linewidth = 2))
+  ) +
+  labs(x = "Month", y = "Mean Temperature (°Kelvin)",
+       color = "Year",
+       title = "Mean Daily Global Sea Surface Temperature, 1981-2024",
+       subtitle = "Latitudes 60°N to 60°S; Area-weighted NOAA OISST v2.1 estimates",
+       caption = "Kieran Healy / @kjhealy") +
+  theme(axis.line = element_line(color = "gray30", linewidth = rel(1)),
+        plot.title = element_text(size = rel(1.9)))
+
+
+ggsave(here("figures", "global_mean_kelvin_zero.png"),
+       out_world_plot_kelvin, height = 7, width = 10, dpi = 300)
 
 
