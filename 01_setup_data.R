@@ -168,16 +168,8 @@ season <-  function(in_date){
 ### Make the dfs
 
 # Update the files
-# February
-#get_nc_files(subdir = "202402")
-#clean_prelims(subdir = "202402")
-
 #get_nc_files(subdir = "202403")
 #clean_prelims(subdir = "202403")
-
-#
-#get_nc_files(subdir = "202404")
-#clean_prelims(subdir = "202404")
 
 
 # Get filenames

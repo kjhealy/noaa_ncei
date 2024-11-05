@@ -19,4 +19,4 @@ This tries to be polite with the NOAA: enforces a wait time always and in additi
 Update a subfolder: 
 wget --no-parent -r -l inf --wait 5 --random-wait 'https://www.ncei.noaa.gov/data/sea-surface-temperature-optimum-interpolation/v2.1/access/avhrr/202402'
 
-and remove preliminaries
+and remove preliminaries. But there's also a function that wraps this more nicely in 01_setup_data.R
