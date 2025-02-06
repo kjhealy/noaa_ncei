@@ -2,7 +2,7 @@ library(tidyverse)
 library(here)
 
 library(kjhmisc)
-kjhmisc::setup_socviz()
+setup_socviz()
 
 colors <- ggokabeito::palette_okabe_ito()
 scales::show_col(colors)
