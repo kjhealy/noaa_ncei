@@ -26,7 +26,7 @@ wget --no-parent -r -l inf --wait 5 --random-wait 'https://www.ncei.noaa.gov/dat
 
 and remove preliminaries. 
 
-### Getting the data more nicely
+### Getting the data from R
 
 Inside `01_setup_data_initial_get.R` is some code to walk the NOAA files politely with `get_nc_files()` and get everything down to a local `raw/` folder. 
 

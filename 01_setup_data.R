@@ -101,7 +101,8 @@ seas_zonal_wrapped <- wrap(seas_zonal)
 
 ## Parallelized, but even so, be patient.
 tictoc::tic("big op")
-seameans_df <- future_map(chunked_fnames, process_raster_zonal) |>
+seameans_df <- future_map(chunked_fnames,
+                          \(x) process_raster_zonal(x, wrapped_seas = seas_zonal_wrapped)) |>
   list_rbind() |>
   mutate(date = ymd(date),
          year = lubridate::year(date),
@@ -121,8 +122,8 @@ save(seameans_df, file = here("data", "seameans_df.Rdata"), compress = "xz")
 world_crop_bb <- c(-180, 180, -60, 60)
 
 tictoc::tic("Terra Method")
-world_df <- future_map(chunked_fnames, process_raster,
-                       crop_area = world_crop_bb) |>
+world_df <- future_map(chunked_fnames,
+                       \(x) process_raster(x, crop_area = world_crop_bb)) |>
   list_rbind() |>
   as_tibble() |>
   mutate(date = ymd(date),

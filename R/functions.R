@@ -2,7 +2,7 @@
 #'
 #' @param url The endpoint URL of the AVHRR data, <https://www.ncei.noaa.gov/data/sea-surface-temperature-optimum-interpolation/v2.1/access/avhrr/>
 #' @param local A local file path for the raw data folders, i.e. where all the year-month dirs go. Defaults to a local version under raw/ of the same path as the NOAA website.
-#' @param subdir The subdirectory of monthly data to get. A character string of digits, of the form "YYYYMM". No default.
+#' @param subdir The subdirectory of monthly data to get. A character string of digits, of the form "YYYYMM". No default. Gets appended to `local`
 #'
 #' @return  A directory of NCDF files.
 #' @export
@@ -28,10 +28,11 @@ get_nc_files <- function(url = "https://www.ncei.noaa.gov/data/sea-surface-tempe
 
 }
 
+# Clean up the prelim files.
 #
-#' Remove -prelim nc files if final nc version exists
+#' Remove -prelim nc files inside a data dir if final nc version exists, otherwise keep it.
 #'
-#' @param subdir A character vector. The name of the subdirectory of .nc files you want to clean up.
+#' @param subdir A file path. The name of the subdirectory of .nc files you want to clean up. Will be appended to `local`
 #' @param local A file path. The name of the subdirectory where all the year-month dirs are. Defaults to a local version under raw/ of the same path as the NOAA website.
 #'
 #' @return Returns "No duplicates" if there are none; otherwise silently deletes dupes.
@@ -67,24 +68,65 @@ clean_prelims <- function(subdir,
 }
 
 
-## For the filename processing
-## This one gives you an unknown number of chunks each with approx n elements
-chunk <- function(x, n) split(x, ceiling(seq_along(x)/n))
+#' Chunk a vector into segments of length `n`
+#'
+#' Take a long vector of file names and split it into some number of chunks each with approx n elements
+#'
+#' @param x Character vector
+#' @param n Desired length of each chunk
+#'
+#' @returns Chunked vector
+#' @export
+#'
+#' @examples \dontrun{
+#' }
+chunk <- function(x, n) {
+  split(x, ceiling(seq_along(x) / n))
+}
 
-## This one gives you n chunks each with an approx equal but unknown number of elements
-chunk2 <- function(x, n) split(x, cut(seq_along(x), n, labels = FALSE))
 
-## The Terra way. Should be considerably faster. (And it is)
-## Even faster with the chunked names, to maximize layered raster processing,
-## Chunks of 25 elements or so seem to work quickly enough.
-layerinfo <- tibble(
-  num = c(1:4),
-  raw_name = c("anom_zlev=0", "err_zlev=0",
-               "ice_zlev=0", "sst_zlev=0"),
-  name = c("anom", "err",
-           "ice", "sst"))
+#' Chunk a vector into `n` pieces
+#'
+#' Take a long vector `x`  and return `n` chunks each with an approximately equal number of elements
+#'
+#' @param x  Character vector
+#' @param n Desired number of chunks
+#'
+#' @returns Chunked vector
+#' @export
+#'
+#' @examples \dontrun{
+#' }
+chunk2 <- function(x, n) {
+  split(x, cut(seq_along(x), n, labels = FALSE))
+}
 
-process_raster <- function(fnames, crop_area = c(-80, 0, 0, 60), layerinfo = layerinfo) {
+
+
+#' Process NCDF temperature rasters
+#'
+#' Use terra to process a temperature NCDF file
+#'
+#' @param fnames
+#' @param crop_area
+#' @param layerinfo
+#'
+#' @returns
+#' @export
+#'
+#' @examples
+process_raster <- function(fnames, crop_area = c(-80, 0, 0, 60), layerinfo = NULL) {
+
+  nc_layerinfo <- tibble(
+    num = c(1:4),
+    raw_name = c("anom_zlev=0", "err_zlev=0",
+                 "ice_zlev=0", "sst_zlev=0"),
+    name = c("anom", "err",
+             "ice", "sst"))
+
+  if(!is.null(layerinfo)) {
+    nc_layerinfo <- layerinfo
+  }
 
   tdf <- terra::rast(fnames) |>
     terra::rotate() |>   # Convert 0 to 360 lon to -180 to +180 lon
@@ -106,8 +148,19 @@ process_raster <- function(fnames, crop_area = c(-80, 0, 0, 60), layerinfo = lay
   out
 }
 
-# This is much faster than using extract()
-process_raster_zonal <- function(fnames) {
+
+#' Process raster zonally
+#'
+#' Use terra to process the NCDF files
+#'
+#' @param fnames Vector of filenames
+#' @param wrapped_seas wrapped object containing rasterized seas data
+#'
+#' @returns
+#' @export
+#'
+#' @examples
+process_raster_zonal <- function(fnames, wrapped_seas = seas_zonal_wrapped) {
 
   d <- terra::rast(fnames)
   wts <- terra::cellSize(d, unit = "km") # For scaling
@@ -120,8 +173,9 @@ process_raster_zonal <- function(fnames) {
 
   # Better colnames
   tdf_seas <- d |>
+
     terra::rotate() |>   # Convert 0 to 360 lon to -180 to +180 lon
-    terra::zonal(unwrap(seas_zonal_wrapped), mean, na.rm = TRUE)
+    terra::zonal(unwrap(wrapped_seas), mean, na.rm = TRUE)
   colnames(tdf_seas) <- new_colnames
 
   # Reshape to long
