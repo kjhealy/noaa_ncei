@@ -168,8 +168,8 @@ season <-  function(in_date){
 ### Make the dfs
 
 # Update the files
-get_nc_files(subdir = "202404")
-clean_prelims(subdir = "202404")
+get_nc_files(subdir = "202501")
+clean_prelims(subdir = "202501")
 
 
 # Get filenames
@@ -184,8 +184,8 @@ chunked_fnames <- chunk(all_fnames, 25)
 crop_bb <- c(-80, 0, 0, 60)
 
 # Try one only
-chk <- process_raster(chunked_fnames[[350]])
-chk
+chk <- process_raster(chunked_fnames[[200]])
+chk |> as_tibble()
 
 ## wheeee
 ## Process >15,000 files

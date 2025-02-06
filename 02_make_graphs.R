@@ -1,29 +1,13 @@
 library(tidyverse)
 library(here)
 
-## Fonts and themes
-library(systemfonts)
-clear_registry()
-
-register_variant(
-  name = "Myriad Pro SemiCondensed",
-  family = "Myriad Pro",
-  width = "semicondensed",
-  weight = c("normal", "semibold"),
-)
-
-library(showtext)
-showtext_opts(dpi = 300)
-showtext_auto()
-
-library(myriad)
-import_myriad_semi()
-import_myriad_condensed()
-theme_set(theme_myriad_semi())
-
+library(kjhmisc)
+kjhmisc::setup_socviz()
 
 colors <- ggokabeito::palette_okabe_ito()
 scales::show_col(colors)
+
+year_seq_colors <- colors[c(1,6,9,2)]
 
 
 ## Setup
@@ -67,6 +51,7 @@ out <- seameans_df |>
   mutate(year_flag = case_when(
     year == 2023 ~ "2023",
     year == 2024 ~ "2024",
+    year == 2025 ~ "2025",
     .default = "All other years"
   ),
   sea_f = factor(sea, levels = main_oceans, ordered = TRUE)) |>
@@ -74,7 +59,7 @@ out <- seameans_df |>
   ggplot(aes(x = yrday, y = sst, group = year, color = year_flag)) +
   geom_line(linewidth = rel(0.5)) +
   scale_x_continuous(breaks = month_labs$yrday, labels = month_labs$month_lab) +
-  scale_color_manual(values = colors[c(1,6,2)]) +
+  scale_color_manual(values = year_seq_colors) +
   guides(
     x = guide_axis(cap = "both"),
     y = guide_axis(minor.ticks = TRUE, cap = "both"),
@@ -83,7 +68,7 @@ out <- seameans_df |>
   facet_wrap(~ sea_f, axes = "all_x", axis.labels = "all_y") +
   labs(x = "Month of the Year", y = "Mean Temperature (Celsius)",
        color = "Year",
-       title = "Mean Daily Sea Surface Temperatures, 1981-2024",
+       title = "Mean Daily Sea Surface Temperatures, 1981-2025",
        subtitle = "Area-weighted 0.25° grid estimates; NOAA OISST v2.1; IHO Sea Boundaries",
        caption = "Data processed with R; Figure made with ggplot by Kieran Healy / @kjhealy") +
   theme(axis.line = element_line(color = "gray30", linewidth = rel(1)),
@@ -91,8 +76,7 @@ out <- seameans_df |>
         plot.title = element_text(size = rel(1.525)),
         plot.subtitle = element_text(size = rel(1.1)))
 
-ggsave(here("figures", "four_oceans.pdf"), out, width = 10, height = 10)
-ggsave(here("figures", "four_oceans.png"), out, width = 10, height = 10, dpi = 300)
+save_figure(here("figures", "four_oceans"), out, width = 10, height = 10)
 
 
 ## All the world's oceans and seas
@@ -100,11 +84,12 @@ out <- seameans_df |>
   mutate(year_flag = case_when(
     year == 2023 ~ "2023",
     year == 2024 ~ "2024",
+    year == 2025 ~ "2025",
     .default = "All other years")) |>
   ggplot(aes(x = yrday, y = sst, group = year, color = year_flag)) +
   geom_line(linewidth = rel(0.5)) +
   scale_x_continuous(breaks = month_labs$yrday, labels = month_labs$month_lab) +
-  scale_color_manual(values = colors[c(1,6,2)]) +
+  scale_color_manual(values = year_seq_colors) +
   guides(
     x = guide_axis(cap = "both"),
     y = guide_axis(minor.ticks = TRUE, cap = "both"),
@@ -113,7 +98,7 @@ out <- seameans_df |>
   facet_wrap(~ reorder(sea, sst), axes = "all_x", axis.labels = "all_y") +
   labs(x = "Month of the Year", y = "Mean Temperature (Celsius)",
        color = "Year",
-       title = "Mean Daily Sea Surface Temperatures, 1981-2024",
+       title = "Mean Daily Sea Surface Temperatures, 1982-2025",
        subtitle = "Area-weighted 0.25° grid estimates; NOAA OISST v2.1; IHO Sea Boundaries",
        caption = "Data processed with R; Figure made with ggplot by Kieran Healy / @kjhealy") +
   theme(axis.line = element_line(color = "gray30", linewidth = rel(1)),
@@ -121,9 +106,7 @@ out <- seameans_df |>
         plot.title = element_text(size = rel(1.525)),
         plot.subtitle = element_text(size = rel(1.1)))
 
-ggsave(here("figures", "all_seas.pdf"), out, width = 40, height = 40)
-ggsave(here("figures", "all_seas.png"), out, width = 40, height = 40, dpi = 300)
-
+save_figure(here("figures", "all_seas"), out, width = 40, height = 40)
 
 
 ## North Atlantic only. Could also use natl_df here for cruder N Atl bounds.
@@ -132,12 +115,13 @@ out_atlantic <- seameans_df |>
   mutate(year_flag = case_when(
     year == 2023 ~ "2023",
     year == 2024 ~ "2024",
+    year == 2025 ~ "2025",
     .default = "All other years"
   )) |>
   ggplot(aes(x = yrday, y = sst, group = year, color = year_flag)) +
   geom_line(linewidth = rel(1.1)) +
   scale_x_continuous(breaks = month_labs$yrday, labels = month_labs$month_lab) +
-  scale_color_manual(values = colors[c(1,6,2)]) +
+  scale_color_manual(values = year_seq_colors) +
   guides(
     x = guide_axis(cap = "both"),
     y = guide_axis(minor.ticks = TRUE, cap = "both"),
@@ -145,12 +129,13 @@ out_atlantic <- seameans_df |>
   ) +
   labs(x = "Month", y = "Mean Temperature (Celsius)",
        color = "Year",
-       title = "Mean Daily Sea Surface Temperature, North Atlantic Ocean, 1981-2024",
-       subtitle = "Gridded and weighted NOAA OISST v2.1 estimates",
+       title = "Mean Daily Sea Surface Temperature, North Atlantic Ocean, 1982-2025",
+       subtitle = "Gridded and area-weighted daily NOAA OISST v2.1 estimates",
        caption = "Kieran Healy / @kjhealy") +
   theme(axis.line = element_line(color = "gray30", linewidth = rel(1)))
 
-ggsave(here("figures", "north_atlantic.png"), out_atlantic, height = 7, width = 10, dpi = 300)
+save_figure(here("figures", "north_atlantic"), out_atlantic, width = 10, height = 7)
+
 
 
 ## World Graph
@@ -168,6 +153,7 @@ out_world <- world_df |>
   mutate(year_flag = case_when(
     year == 2023 ~ "2023",
     year == 2024 ~ "2024",
+    year == 2025 ~ "2025",
     .default = "All other years"))
 
 
@@ -193,8 +179,7 @@ out_world_plot <- ggplot() +
   geom_line(data = out_world,
             mapping = aes(x = yrday, y = sst, group = year, color = year_flag),
             inherit.aes = FALSE) +
-  #  scale_color_manual(values = c("orange", "firebrick1", "grey50")) +
-  scale_color_manual(values = colors[c(1,6,8)]) +
+  scale_color_manual(values = year_seq_colors) +
   scale_x_continuous(breaks = month_labs$yrday, labels = month_labs$month_lab) +
   scale_y_continuous(breaks = seq(19.5, 21.5, 0.5),
                      limits = c(19.5, 21.5),
@@ -206,13 +191,13 @@ out_world_plot <- ggplot() +
   ) +
   labs(x = "Month", y = "Mean Temperature (°Celsius)",
        color = "Year",
-       title = "Mean Daily Global Sea Surface Temperature, 1981-2024",
+       title = "Mean Daily Global Sea Surface Temperature, 1982-2025",
        subtitle = "Latitudes 60°N to 60°S; Area-weighted NOAA OISST v2.1 estimates",
        caption = "Kieran Healy / @kjhealy") +
   theme(axis.line = element_line(color = "gray30", linewidth = rel(1)),
         plot.title = element_text(size = rel(1.9)))
 
-ggsave(here("figures", "global_mean.png"), out_world_plot, height = 7, width = 10, dpi = 300)
+save_figure(here("figures", "global_mean"), out_world_plot, height = 7, width = 10, dpi = 300)
 
 
 
@@ -240,14 +225,14 @@ out_world_plot_kelvin <- ggplot() +
   ) +
   labs(x = "Month", y = "Mean Temperature (°Kelvin)",
        color = "Year",
-       title = "Mean Daily Global Sea Surface Temperature, 1981-2024",
+       title = "Mean Daily Global Sea Surface Temperature, 1981-2025",
        subtitle = "Latitudes 60°N to 60°S; Area-weighted NOAA OISST v2.1 estimates",
        caption = "Kieran Healy / @kjhealy") +
   theme(axis.line = element_line(color = "gray30", linewidth = rel(1)),
         plot.title = element_text(size = rel(1.9)))
 
 
-ggsave(here("figures", "global_mean_kelvin_zero.png"),
+save_figure(here("figures", "global_mean_kelvin_zero"),
        out_world_plot_kelvin, height = 7, width = 10, dpi = 300)
 
 

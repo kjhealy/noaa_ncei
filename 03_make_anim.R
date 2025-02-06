@@ -3,27 +3,17 @@ library(here)
 library(gganimate)
 library(transformr)
 
-## Fonts and themes
-library(systemfonts)
-clear_registry()
+library(kjhmisc)
+kjhmisc::setup_socviz()
 
-register_variant(
-  name = "Myriad Pro SemiCondensed",
-  family = "Myriad Pro",
-  width = "semicondensed",
-  weight = c("normal", "semibold"),
-)
+colors <- ggokabeito::palette_okabe_ito()
+scales::show_col(colors)
 
-library(showtext)
-showtext_opts(dpi = 300)
-showtext_auto()
+year_seq_colors <- colors[c(1,6,9,2)]
 
-library(myriad)
-import_myriad_semi()
-import_myriad_condensed()
 
 theme_figs <- function(){
-  theme_myriad_semi() +
+  theme_socviz_semi() +
     theme(
       plot.background = element_rect(color = "white"),
       plot.title = element_text(size = rel(2)),
@@ -34,11 +24,6 @@ theme_figs <- function(){
 }
 
 theme_set(theme_figs())
-
-
-colors <- ggokabeito::palette_okabe_ito()
-scales::show_col(colors[3])
-
 
 ## Setup
 
@@ -64,9 +49,6 @@ month_labs <- seameans_df |>
   select(date, year, yrday, month, day) |>
   mutate(month_lab = month(date, label = TRUE, abbr = TRUE))
 
-
-
-
 world_avg <- world_df |>
   filter(year > 1981 & year < 2012) |>
   group_by(yrday) |>
@@ -80,6 +62,7 @@ out_world <- world_df |>
   mutate(year_flag = case_when(
     year == 2023 ~ "2023",
     year == 2024 ~ "2024",
+    year == 2025 ~ "2025",
     .default = "All other years"),
     days_elapsed = as.integer(date - first(date)))
 
@@ -99,11 +82,11 @@ out_world_mov <- out_world |>
                   force = 0,
                   force_pull = 0,
                   segment.color = "transparent",
-                  family = "Myriad Pro Condensed",
+                  family = "Socviz Condensed",
                   color = colors[3],
                   alpha = 0.6,
                   show.legend = FALSE) +
-  scale_color_manual(values = colors[c(1,6,8)]) +
+  scale_color_manual(values = year_seq_colors) +
   scale_x_continuous(breaks = month_labs$yrday, labels = month_labs$month_lab) +
   scale_y_continuous(breaks = seq(19.5, 21.5, 0.5),
                      limits = c(19.5, 21.5),
