@@ -36,8 +36,8 @@ season <-  function(in_date){
 # For the initial get, use 01_setup_data_initial_get.R
 
 # Update for a specific month
-get_nc_files(subdir = "202501")
-clean_prelims(subdir = "202501")
+#get_nc_files(subdir = "202503")
+#clean_prelims(subdir = "202502")
 
 
 # Get filenames
