@@ -36,8 +36,8 @@ season <-  function(in_date){
 # For the initial get, use 01_setup_data_initial_get.R
 
 # Update for a specific month
-#get_nc_files(subdir = "202503")
-#clean_prelims(subdir = "202502")
+#get_nc_files(subdir = "202508")
+#clean_prelims(subdir = "202507")
 
 
 # Get filenames
@@ -52,11 +52,12 @@ chunked_fnames <- chunk(all_fnames, 25)
 crop_bb <- c(-80, 0, 0, 60)
 
 # Try one only
+tmp <- process_raster(all_fnames[1])
+
 chk <- process_raster(chunked_fnames[[200]])
 chk |> as_tibble()
 
 ## wheeee
-## Process >15,000 files
 tictoc::tic("Terra Method")
 df <- future_map(chunked_fnames, process_raster) |>
   list_rbind() |>
@@ -80,7 +81,9 @@ write_csv(df, file = here("data", "natl_means.csv"))
 # IHO Sea Areas V3 shapefile.
 seas <- sf::read_sf(here("raw", "World_Seas_IHO_v3"))
 
-seas
+terra::rast(all_fnames[100]) |>
+  terra::rotate()
+
 
 ## Rasterize the seas polygons using one of the nc files
 ## as a reference grid for the rasterization process
@@ -91,7 +94,7 @@ tmp_tdf_seas <- terra::rast(one_raster)["sst"] |>
 seas_zonal <- rasterize(seas_vect, tmp_tdf_seas, "NAME")
 
 # Take a look
-plot(seas_zonal)
+#plot(seas_zonal)
 
 # Need to wrap the object (because C++ pointers)
 # If we don't do this it can't be passed around

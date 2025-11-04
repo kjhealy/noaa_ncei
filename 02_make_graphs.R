@@ -1,8 +1,13 @@
 library(tidyverse)
-library(here)
-
 library(kjhmisc)
+library(here)
+library(janitor)
+
 setup_socviz()
+
+
+theme_set(theme_socviz_semi())
+
 
 colors <- ggokabeito::palette_okabe_ito()
 scales::show_col(colors)
@@ -109,6 +114,37 @@ out <- seameans_df |>
 save_figure(here("figures", "all_seas"), out, width = 40, height = 40)
 
 
+## All the world's oceans and seas 13 column
+out <- seameans_df |>
+  mutate(year_flag = case_when(
+    year == 2023 ~ "2023",
+    year == 2024 ~ "2024",
+    year == 2025 ~ "2025",
+    .default = "All other years")) |>
+  ggplot(aes(x = yrday, y = sst, group = year, color = year_flag)) +
+  geom_line(linewidth = rel(0.5)) +
+  scale_x_continuous(breaks = month_labs$yrday, labels = month_labs$month_lab) +
+  scale_color_manual(values = year_seq_colors) +
+  guides(
+    x = guide_axis(cap = "both"),
+    y = guide_axis(minor.ticks = TRUE, cap = "both"),
+    color = guide_legend(override.aes = list(linewidth = 1.4))
+  ) +
+  facet_wrap(~ reorder(sea, sst), axes = "all_x", axis.labels = "all_y",
+             ncol = 13) +
+  labs(x = "Month of the Year", y = "Mean Temperature (Celsius)",
+       color = "Year",
+       title = "Mean Daily Sea Surface Temperatures, 1982-2025",
+       subtitle = "Area-weighted 0.25° grid estimates; NOAA OISST v2.1; IHO Sea Boundaries",
+       caption = "Data processed with R; Figure made with ggplot by Kieran Healy / @kjhealy") +
+  theme(axis.line = element_line(color = "gray30", linewidth = rel(1)),
+        strip.text = element_text(face = "bold", size = rel(1.4)),
+        plot.title = element_text(size = rel(1.525)),
+        plot.subtitle = element_text(size = rel(1.1)))
+
+save_figure(here("figures", "all_seas"), out, width = 48, height = 40)
+
+
 ## North Atlantic only. Could also use natl_df here for cruder N Atl bounds.
 out_atlantic <- seameans_df |>
   filter(sea == "North Atlantic Ocean") |>
@@ -199,6 +235,30 @@ out_world_plot <- ggplot() +
 
 save_figure(here("figures", "global_mean"), out_world_plot, height = 7, width = 10, dpi = 300)
 
+out_world_simple <- ggplot(
+  data = out_world,
+  mapping = aes(x = yrday, y = sst, group = year, color = year_flag)) +
+  geom_line() +
+  scale_color_manual(values = year_seq_colors) +
+  scale_x_continuous(breaks = month_labs$yrday, labels = month_labs$month_lab) +
+  scale_y_continuous(breaks = seq(19.5, 21.5, 0.5),
+                     limits = c(19.5, 21.5),
+                     expand = expansion(mult = c(-0.05, 0.05))) +
+  guides(
+    x = guide_axis(cap = "both"),
+    y = guide_axis(minor.ticks = TRUE, cap = "both"),
+    color = guide_legend(override.aes = list(linewidth = 2))
+  ) +
+  labs(x = "Month", y = "Mean Temperature (°Celsius)",
+       color = "Year",
+       title = "Mean Daily Global Sea Surface Temperature, 1982-2025",
+       subtitle = "Latitudes 60°N to 60°S; Area-weighted NOAA OISST v2.1 estimates",
+       caption = "Kieran Healy / @kjhealy") +
+  theme(axis.line = element_line(linewidth = rel(1)),
+        plot.title = element_text(size = rel(1.9)))
+
+
+save_figure(here("figures", "global_mean_simple"), out_world_simple, height = 7, width = 12, dpi = 300)
 
 
 
