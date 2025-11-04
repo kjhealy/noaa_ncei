@@ -3,11 +3,15 @@
 #install.packages("ncdf4")
 #install.packages("CFtime")
 
-
 library(tidyverse)
 library(here)
-library(furrr)
-plan(multisession)
+
+# Set up parallel processing (6 background processes)
+library(mirai)
+
+# Summon daemons
+daemons(15)
+status()
 
 ## For the raster data
 library(ncdf4)
@@ -19,11 +23,8 @@ library(terra)
 source(here("R", "functions.R"))
 
 ## Seasons for plotting
-season <-  function(in_date){
-  br = yday(as.Date(c("2019-03-01",
-                      "2019-06-01",
-                      "2019-09-01",
-                      "2019-12-01")))
+season <- function(in_date) {
+  br = yday(as.Date(c("2019-03-01", "2019-06-01", "2019-09-01", "2019-12-01")))
   x = yday(in_date)
   x = cut(x, breaks = c(0, br, 366))
   levels(x) = c("Winter", "Spring", "Summer", "Autumn", "Winter")
@@ -38,7 +39,6 @@ season <-  function(in_date){
 # Update for a specific month
 #get_nc_files(subdir = "202503")
 #clean_prelims(subdir = "202502")
-
 
 # Get filenames
 # All the daily .nc files we downloaded:
@@ -58,15 +58,21 @@ chk |> as_tibble()
 ## wheeee
 ## Process >15,000 files
 tictoc::tic("Terra Method")
-df <- future_map(chunked_fnames, process_raster) |>
+df <- chunked_fnames |>
+  map(in_parallel(
+    \(x) process_raster(x),
+    process_raster = process_raster
+  )) |>
   list_rbind() |>
   as_tibble() |>
-  mutate(date = ymd(date),
-         year = lubridate::year(date),
-         month = lubridate::month(date),
-         day = lubridate::day(date),
-         yrday = lubridate::yday(date),
-         season = season(date))
+  mutate(
+    date = ymd(date),
+    year = lubridate::year(date),
+    month = lubridate::month(date),
+    day = lubridate::day(date),
+    yrday = lubridate::yday(date),
+    season = season(date)
+  )
 tictoc::toc()
 
 ## Save out as a csv
@@ -96,20 +102,26 @@ plot(seas_zonal)
 # Need to wrap the object (because C++ pointers)
 # If we don't do this it can't be passed around
 # across the processes that future_map() will spawn
-seas_zonal_wrapped <- wrap(seas_zonal)
+seas_zonal_wrapped <- terra::wrap(seas_zonal)
 
 
 ## Parallelized, but even so, be patient.
 tictoc::tic("big op")
-seameans_df <- future_map(chunked_fnames,
-                          \(x) process_raster_zonal(x, wrapped_seas = seas_zonal_wrapped)) |>
+seameans_df <- chunked_fnames |>
+  map(in_parallel(
+    \(x) process_raster_zonal(x),
+    process_raster_zonal = process_raster_zonal,
+    seas_zonal_wrapped = seas_zonal_wrapped
+  )) |>
   list_rbind() |>
-  mutate(date = ymd(date),
-         year = lubridate::year(date),
-         month = lubridate::month(date),
-         day = lubridate::day(date),
-         yrday = lubridate::yday(date),
-         season = season(date))
+  mutate(
+    date = ymd(date),
+    year = lubridate::year(date),
+    month = lubridate::month(date),
+    day = lubridate::day(date),
+    yrday = lubridate::yday(date),
+    season = season(date)
+  )
 tictoc::toc()
 
 write_csv(seameans_df, file = here("data", "oceans_means_zonal.csv"))
@@ -122,16 +134,25 @@ save(seameans_df, file = here("data", "seameans_df.Rdata"), compress = "xz")
 world_crop_bb <- c(-180, 180, -60, 60)
 
 tictoc::tic("Terra Method")
-world_df <- future_map(chunked_fnames,
-                       \(x) process_raster(x, crop_area = world_crop_bb)) |>
+world_df <- chunked_fnames |>
+  map(in_parallel(
+    \(x) process_raster(x, crop_area = world_crop_bb),
+    process_raster = process_raster,
+    world_crop_bb = world_crop_bb
+  )) |>
   list_rbind() |>
   as_tibble() |>
-  mutate(date = ymd(date),
-         year = lubridate::year(date),
-         month = lubridate::month(date),
-         day = lubridate::day(date),
-         yrday = lubridate::yday(date),
-         season = season(date))
+  mutate(
+    date = ymd(date),
+    year = lubridate::year(date),
+    month = lubridate::month(date),
+    day = lubridate::day(date),
+    yrday = lubridate::yday(date),
+    season = season(date)
+  )
 tictoc::toc()
 
 write_csv(world_df, file = here("data", "global_means_60S60N.csv"))
+
+## Banish daemons
+daemons(0)
