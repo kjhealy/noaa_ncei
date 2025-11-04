@@ -104,7 +104,7 @@ seas_zonal <- rasterize(seas_vect, tmp_tdf_seas, "NAME")
 
 # Need to wrap the object (because C++ pointers)
 # If we don't do this it can't be passed around
-# across the processes that future_map() will spawn
+# across the processes that in_parallel() will spawn
 seas_zonal_wrapped <- terra::wrap(seas_zonal)
 
 
@@ -128,7 +128,7 @@ seameans_df <- chunked_fnames |>
 tictoc::toc()
 
 write_csv(seameans_df, file = here("data", "oceans_means_zonal.csv"))
-save(seameans_df, file = here("data", "seameans_df.Rdata"), compress = "xz")
+saveRDS(seameans_df, here("data", "seameans_df.rda"), compress = "xz")
 
 
 ## World average

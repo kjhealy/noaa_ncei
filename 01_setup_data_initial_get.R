@@ -15,7 +15,6 @@ yrs <- 1982:2024
 months <- sprintf('%0.2d', 1:12)
 subdirs <- c(first_yr, paste0(rep(yrs, each = 12), months))
 
-politely_get_nc_files <- slowly(get_nc_files)
+slowly_get_nc_files <- slowly(get_nc_files)
 
-walk(subdirs,
-     \(x) politely_get_nc_files(subdir = x))
+walk(subdirs, \(x) slowly_get_nc_files(subdir = x))
