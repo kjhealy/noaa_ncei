@@ -9,6 +9,7 @@ library(here)
 # Set up parallel processing (6 background processes)
 library(mirai)
 
+
 # Summon daemons
 daemons(15)
 status()
@@ -37,8 +38,8 @@ season <- function(in_date) {
 # For the initial get, use 01_setup_data_initial_get.R
 
 # Update for a specific month
-#get_nc_files(subdir = "202508")
-#clean_prelims(subdir = "202507")
+#get_nc_files(subdir = "202512")
+#clean_prelims(subdir = "202512")
 
 # Get filenames
 # All the daily .nc files we downloaded:
