@@ -11,7 +11,7 @@ library(mirai)
 
 
 # Summon daemons
-daemons(15)
+daemons(17)
 status()
 
 ## For the raster data
@@ -25,10 +25,10 @@ source(here("R", "functions.R"))
 
 ## Seasons for plotting
 season <- function(in_date) {
-  br = yday(as.Date(c("2019-03-01", "2019-06-01", "2019-09-01", "2019-12-01")))
-  x = yday(in_date)
-  x = cut(x, breaks = c(0, br, 366))
-  levels(x) = c("Winter", "Spring", "Summer", "Autumn", "Winter")
+  br <- yday(as.Date(c("2019-03-01", "2019-06-01", "2019-09-01", "2019-12-01")))
+  x <- yday(in_date)
+  x <- cut(x, breaks = c(0, br, 366))
+  levels(x) <- c("Winter", "Spring", "Summer", "Autumn", "Winter")
   x
 }
 
@@ -38,8 +38,13 @@ season <- function(in_date) {
 # For the initial get, use 01_setup_data_initial_get.R
 
 # Update for a specific month
-#get_nc_files(subdir = "202512")
-#clean_prelims(subdir = "202512")
+# get_nc_files(subdir = "202601")
+# clean_prelims(subdir = "202601")
+
+new_months <- paste0("20260", as.character(seq(1:7)))
+
+walk(new_months, \(x) get_nc_files(subdir = x))
+walk(new_months, \(x) clean_prelims(subdir = x))
 
 # Get filenames
 # All the daily .nc files we downloaded:

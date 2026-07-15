@@ -4,13 +4,13 @@ library(gganimate)
 library(transformr)
 library(myriad)
 library(kjhmisc)
-kjhmisc::setup_socviz()
 
+setup_socviz()
 
 colors <- ggokabeito::palette_okabe_ito()
 scales::show_col(colors)
 
-year_seq_colors <- colors[c(1, 6, 9, 2)]
+year_seq_colors <- colors[c(6, 7, 1, 9, 2)]
 
 
 theme_figs <- function() {
@@ -69,6 +69,7 @@ out_world <- world_df |>
       year == 2023 ~ "2023",
       year == 2024 ~ "2024",
       year == 2025 ~ "2025",
+      year == 2026 ~ "2026",
       .default = "All other years"
     ),
     days_elapsed = as.integer(date - first(date))
@@ -112,7 +113,7 @@ out_world_mov <- out_world |>
     x = "Month",
     y = "Mean Temperature (°Celsius)",
     color = "Year",
-    title = "Mean Daily Global Sea Surface Temperature, {out_world$year[which.min(abs(out_world$days_elapsed-frame_along))]}",
+    title = "Mean Daily Global Sea Surface Temperature",
     subtitle = "Latitudes 60°N to 60°S; Area-weighted NOAA OISST v2.1 estimates",
     caption = "Kieran Healy / kieranhealy.org"
   ) +
