@@ -6,7 +6,7 @@
 library(tidyverse)
 library(here)
 
-# Set up parallel processing (6 background processes)
+# Set up parallel processing
 library(mirai)
 
 
@@ -41,10 +41,10 @@ season <- function(in_date) {
 # get_nc_files(subdir = "202601")
 # clean_prelims(subdir = "202601")
 
-new_months <- paste0("20260", as.character(seq(1:7)))
+#new_months <- c(paste0("20260", as.character(c(8:9))), "202610")
 
-walk(new_months, \(x) get_nc_files(subdir = x))
-walk(new_months, \(x) clean_prelims(subdir = x))
+#walk(new_months, \(x) get_nc_files(subdir = x))
+#walk(new_months, \(x) clean_prelims(subdir = x))
 
 # Get filenames
 # All the daily .nc files we downloaded:
